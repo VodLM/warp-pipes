@@ -1,4 +1,3 @@
-from warp_pipes.core.fingerprintable import Fingerprintable
 from typing import Optional, Any
 
 from warp_pipes.core.fingerprintable import Fingerprintable

@@ -34,6 +34,8 @@ class Fingerprintable(object):
     `Fingerprintable` implements a few method that helps integration with the rest of the framework,
     such as safe serialization (pickle, multiprocessing) and deterministic caching (datasets).
 
+    TODO: refactor with __getstate__ and __setstate__ (avoid hacing to specify `no_fingerprint`)
+
     Functionalities:
      - Serialization capability can be inspected using `.dill_inspect()`
      - The hash/fingerprint of the object and its attributes can be obtained using `.fingerprint()`
@@ -88,7 +90,9 @@ class Fingerprintable(object):
         if reduce:
             return dill.pickles(self)
         else:
-            data = self.to_json_struct(exclude_non_fingerprintable=False)
+            data = self.to_json_struct(
+                exclude_non_fingerprintable=exclude_non_fingerprintable
+            )
             safe_pickles_ = partial(safe_pickles, excluded_keys=["__name__"])
             return apply_to_json_struct(data, safe_pickles_)
 
@@ -246,6 +250,15 @@ class Fingerprintable(object):
         for k, v in kwargs.items():
             setattr(obj, k, v)
         return obj
+
+    def __getstate__(self):
+        """Return the state of the object."""
+        attrs = self.__dict__
+        return attrs
+
+    def __setstate__(self, state):
+        """Set the state of the object."""
+        self.__dict__.update(state)
 
     def pprint(self):
         rich.print(self.to_json_struct())

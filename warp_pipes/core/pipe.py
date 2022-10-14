@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from abc import ABCMeta
 from abc import abstractmethod
 from copy import copy
 
@@ -16,6 +17,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import T
+from os import PathLike
 
 import re
 import datasets
@@ -25,96 +27,47 @@ from datasets import Dataset
 from datasets import DatasetDict
 from transformers import BatchEncoding
 
-from fz_openqa.datamodules.component import Component
-from fz_openqa.datamodules.pipes.control.condition import Condition
-from fz_openqa.utils.datastruct import Batch
-from fz_openqa.utils.datastruct import Eg
-from fz_openqa.utils.datastruct import PathLike
-from fz_openqa.utils.fingerprint import get_fingerprint
-from fz_openqa.utils.functional import get_batch_eg
-from fz_openqa.utils.json_struct import reduce_json_struct
+from warp_pipes.core.fingerprintable import Fingerprintable
+from warp_pipes.core.condition import Condition
+from warp_pipes.support.datastruct import Batch
+from warp_pipes.support.datastruct import Eg
+from warp_pipes.support.fingerprint import get_fingerprint
+from warp_pipes.support.json_struct import reduce_json_struct
+from warp_pipes.support.functional import get_batch_eg
 
 from loguru import logger
 
 
-def slice_batch(batch: Batch, i: int | slice) -> Batch:
-    """
-
-    Args:
-      batch: Batch:
-      i: int | slice:
-
-    Returns:
-
-
-    """
-    return {k: v[i] for k, v in batch.items()}
-
-
-def camel_to_snake(name):
-    """
-
-    Args:
-      name:
-
-    Returns:
-
-
-    """
-    name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
-    return re.sub("([a-z0-9])([A-Z])", r"\1_\2", name).lower()
-
-
-class Pipe(Component):
+class Pipe(Fingerprintable):
     """A pipe is a small unit of computation that ingests,
-    modify and returns a batch of data.
+    modify and returns a batch of data."""
 
-    ----------
-    Attributes
-    id
-       An identifier for the pipe.
-    input_filter
-        Condition used to filter keys in the input data.
-    update
-        If set to True, output the input batch with the output batch.
-    requires_keys
-       A list of keys that the pipe requires to be present in the data.
-
-    Args:
-
-    Returns:
-
-
-    """
-
-    # __metaclass__ = ABCMeta
-    id: Optional[str] = None
+    __metaclass__ = ABCMeta
+    # input filter applied to the input batch
     input_filter: Optional[Condition] = None
+    # names of the keys required by the pipe
     requires_keys: Optional[List[str]] = None
+    # whether the pipe allows setting `update=True``
     _allows_update: bool = True
+    # whether the pipe allows setting a custom `input_filter`
     _allows_input_filter: bool = True
-    _backend: Optional[str] = None
+    # maximum number of parallel processes to use
     _max_num_proc: Optional[int] = None
 
     def __init__(
         self,
         *,
-        id: Optional[str] = None,
         input_filter: Optional[Condition] = None,
         update: bool = False,
+        **kwargs,
     ):
         """
-        Parameters
-        ----------
-        id
-           An identifier for the pipe.
-        input_filter
-            a condition used to filter keys in the input data
-            (keys that do not satisfy the condition are removed)
-        update
-            If set to True, output the input batch updated with the output batch.
+        Args:
+            input_filter (:obj:`Condition`, optional) input key filter
+            update (:obj:`bool`, optional) whether to update the input
+                batch with the output of the pipe
         """
-        super().__init__(id=id)
+        super().__init__(**kwargs)
         if not self._allows_update and update:
             raise AttributeError(
                 f"{type(self).__name__} does not allow using update=True"
@@ -129,87 +82,16 @@ class Pipe(Component):
             self.input_filter = input_filter
         self.update = update
 
-    def output_keys(self, input_keys: List[str]) -> List[str]:
-        """Return the list of keys that the pipe is expected to return.
-
-        Args:
-          input_keys: The list of keys that the pipe expects as input.
-          input_keys: List[str]:
-
-        Returns:
-
-
-        """
-        output_keys = copy(input_keys)
-        if self.input_filter is not None:
-            output_keys = list(
-                {k: None for k in output_keys if self.input_filter(k)}.keys()
-            )
-
-        if self.update:
-            output_keys = input_keys + output_keys
-
-        return output_keys
-
-    @staticmethod
-    def get_eg(
-        batch: Batch, idx: int, filter_op: Optional[Callable] = None
-    ) -> Dict[str, Any]:
-        """Extract example `idx` from a batch, potentially filter keys.
-
-        Args:
-          batch: Input batch
-          idx: Index of the example to extract
-          filter_op: A function that used to filter the keys
-          batch: Batch:
-          idx: int:
-          filter_op: Optional[Callable]:  (Default value = None)
-
-        Returns:
-
-
-        """
-        return get_batch_eg(batch=batch, idx=idx, filter_op=filter_op)
-
     @singledispatchmethod
-    def __call__(
-        self,
-        data: T,
-        idx: Optional[List[int]] = None,
-        num_proc: int = 4,
-        desc: Optional[str] = None,
-        batch_size: Optional[int] = None,
-        writer_batch_size: Optional[int] = None,
-        set_new_fingerprint: bool = False,
-        **kwargs,
-    ) -> T:
+    def __call__(self, data: T, **kwargs) -> T:
         """
-        Apply the pipe to a data. Potentially filter the keys using the input_filter.
-        This method is dispatched on the type of the input data.
-
-        Parameters
-        ----------
-        data
-            The input data
-        idx
-            indexes of the batch examples
-        num_proc
-            For `Dataset` input only: number of processes to use
-        desc
-            For `Dataset` input only: description for the progress bar
-        writer_batch_size
-            For `Dataset` input only: batch size for the pyarrow writer
-        set_new_fingerprint
-            For `Dataset` input only: set `new_fingerprint` using `Pipe.get_fingerprint`.
-        kwargs
-            additional arguments
-
-        Returns
-        -------
-        Batch
-            The output data
+        Process the input data using the Pipe. The method is overloaded to handle different
+        types of input data. Accepted types:
+            - List[Eg]
+            - Batch
+            - datasets.Dataset
+            - datasets.DatasetDict
         """
-
         raise TypeError(f"{type(self).__name__} does not support {type(data)}.")
 
     @__call__.register(datasets.arrow_dataset.Batch)
@@ -219,18 +101,6 @@ class Pipe(Component):
         """Apply the pipe to a batch of data. Potentially filter the keys using the input_filter.
         The output of `_call_batch()` is used to update the input batch (before filtering)
         if update=True, else the raw output is returned.
-
-        Args:
-          batch: batch to apply the pipe to
-          idx: indexes of the batch examples
-          kwargs: additional arguments
-          batch: Batch:
-          idx: Optional[List[int]]:  (Default value = None)
-          **kwargs:
-
-        Returns:
-
-
         """
 
         try:
@@ -253,20 +123,7 @@ class Pipe(Component):
 
     @__call__.register(list)
     def _(self, examples: List[Eg], idx: Optional[List[int]] = None, **kwargs) -> Batch:
-        """Apply the pipe to a list of examples. Typically to concatenate examples.
-
-        Args:
-          examples: batch of examples to apply the pipe to
-          idx: indexes of the examples
-          kwargs: additional arguments
-          examples: List[Eg]:
-          idx: Optional[List[int]]:  (Default value = None)
-          **kwargs:
-
-        Returns:
-
-
-        """
+        """Apply the pipe to a list of examples. Typically used to concatenate examples."""
 
         if not all(isinstance(eg, dict) for eg in examples):
             raise TypeError(
@@ -292,73 +149,15 @@ class Pipe(Component):
         return output
 
     @__call__.register(Dataset)
-    def _(
-        self,
-        dataset: Dataset,
-        *,
-        num_proc: int = 4,
-        desc: Optional[str] = None,
-        batch_size: Optional[int] = None,
-        writer_batch_size: Optional[int] = None,
-        **kwargs,
-    ) -> Dataset:
-        """Apply the Pipe to a `Dataset`
-
-        Args:
-          dataset: A Huggingface Dataset object
-          num_proc: Number of workers
-          desc: Description for the progress bar
-          batch_size: Batch size for each worker
-          writer_batch_size: Batch size for the pyarrow writer
-          kwargs:
-          dataset: Dataset:
-          *:
-          num_proc: int:  (Default value = 4)
-          desc: Optional[str]:  (Default value = None)
-          batch_size: Optional[int]:  (Default value = None)
-          writer_batch_size: Optional[int]:  (Default value = None)
-          **kwargs:
-
-        Returns:
-
-
-        """
-        return self._call_dataset(
-            dataset,
-            num_proc=num_proc,
-            desc=desc,
-            batch_size=batch_size,
-            writer_batch_size=writer_batch_size,
-            **kwargs,
-        )
+    def _(self, dataset: Dataset, **kwargs) -> Dataset:
+        return self._call_dataset(dataset, **kwargs)
 
     @__call__.register(DatasetDict)
     def _(self, dataset: DatasetDict, **kwargs) -> DatasetDict:
-        """Apply the Pipe to a `DatasetDict`
-
-        Args:
-          dataset: A Huggingface DatasetDict object
-          kwargs:
-          dataset: DatasetDict:
-          **kwargs:
-
-        Returns:
-
-
-        """
         return self._call_dataset_dict(dataset, **kwargs)
 
     def _call_dataset_dict(self, dataset: DatasetDict, **kwargs) -> DatasetDict:
-        """
-
-        Args:
-          dataset: DatasetDict:
-          **kwargs:
-
-        Returns:
-
-
-        """
+        """Process a `datasets.DatasetDict` using the Pipe"""
         new_datasets = {
             split: self._call_dataset(d, split=split, **kwargs)
             for split, d in dataset.items()
@@ -369,19 +168,14 @@ class Pipe(Component):
     def _call_batch(
         self, batch: Batch, idx: Optional[List[int]] = None, **kwargs
     ) -> Batch:
-        """Main operation applied to the batch.
+        """Operation applied to the batch.
 
         Args:
-          batch: batch to apply the pipe to
-          idx: indexes of the batch examples
-          kwargs: additional arguments
-          batch: Batch:
-          idx: Optional[List[int]]:  (Default value = None)
-          **kwargs:
+          batch (:obj:`Batch`): input batch
+            idx (:obj:`List[int]`, optional): indices of the examples in the batch
 
         Returns:
-
-
+            :obj:`Batch`: output batch
         """
         raise NotImplementedError(f"_call_batch is not implemented for {type(self)}")
 
@@ -389,20 +183,7 @@ class Pipe(Component):
     def _call_egs(
         self, examples: List[Eg], idx: Optional[List[int]] = None, **kwargs
     ) -> Batch:
-        """Main Operation applied to a list of examples (Egs). Typically to concatenate examples.
-
-        Args:
-          examples: List of examples
-          idx: indexes of the examples
-          kwargs: additional arguments
-          examples: List[Eg]:
-          idx: Optional[List[int]]:  (Default value = None)
-          **kwargs:
-
-        Returns:
-
-
-        """
+        """Operation applied to a list of examples (Egs). Typically to concatenate examples."""
         raise NotImplementedError(f"_call_egs is not implemented for {type(self)}")
 
     def _call_dataset(
@@ -419,33 +200,17 @@ class Pipe(Component):
         fingerprint_kwargs_exclude: Optional[List[str]] = None,
         **kwargs,
     ) -> Dataset:
-        """Apply the Pipe to a `Dataset`
+        """Process a `datasets.Dataset` using the Pipe.
 
         Args:
-          dataset: A Huggingface Dataset object
-          num_proc: Number of workers
-          desc: Description for the progress bar
-          batch_size: Batch size for each worker
-          writer_batch_size: Batch size for the pyarrow writer
-          kwargs: Additional attributes passed to the pipe
-          set_new_fingerprint: If True, the `new_fingerprint` will de defined
-        using `Pipe.fingerprint()` and `Dataset._fingerprint`
-          cache_fingerprint: If set to a path, the fingerprint will be cache to that directory.
-          dataset: Dataset:
-          *:
-          num_proc: int:  (Default value = 4)
-          desc: Optional[str]:  (Default value = None)
-          batch_size: int:  (Default value = 100)
-          writer_batch_size: int:  (Default value = 1000)
-          set_new_fingerprint: bool:  (Default value = False)
-          keep_in_memory: bool:  (Default value = False)
-          cache_fingerprint: Optional[PathLike]:  (Default value = None)
-          fingerprint_kwargs_exclude: Optional[List[str]]:  (Default value = None)
-          **kwargs:
+          dataset (:obj:`datasets.Dataset`): the dataset to process
+          num_proc (:obj:`int`): number of parallel processes to use
+          desc (:obj:`str`): description of the progress bar
+          batch_size (:obj:`int`): batch size to use for each worker
+          writer_batch_size (:obj:`int`): batch size to use for the PyArrow writer
 
         Returns:
-
-
+            :obj:`datasets.Dataset`: the processed dataset
         """
         if fingerprint_kwargs_exclude is None:
             fingerprint_kwargs_exclude = []
@@ -507,28 +272,11 @@ class Pipe(Component):
 
     @property
     def max_num_proc(self) -> Optional[int]:
-        """Maximum number of workers to use, check all children and takes the minimum value
-
-        todo: investigate why the values needs to be filtered by type
-         (type of `_max_num_proc`: `int` returned as well)
-
-        Args:
-
-        Returns:
-
-        """
+        """Infer the maximum number of workers to use,
+        check all children and takes the minimum value."""
         json_struct = self.to_json_struct(include_class_attributes=True)
 
         def safe_min(x):
-            """
-
-            Args:
-              x:
-
-            Returns:
-
-
-            """
             x = [y for y in x if isinstance(y, int)]
             if len(x):
                 return min(x)
@@ -536,15 +284,6 @@ class Pipe(Component):
                 return None
 
         def key_filter(key):
-            """
-
-            Args:
-              key:
-
-            Returns:
-
-
-            """
             return key == "_max_num_proc"
 
         return reduce_json_struct(
@@ -552,20 +291,16 @@ class Pipe(Component):
         )
 
     def _filter_keys(self, batch: Batch) -> Batch:
-        """Filter the batch using the input_filter.
-
-        Args:
-          batch: batch to filter
-          batch: Batch:
-
-        Returns:
-
-
-        """
         if self.input_filter is None:
             return batch
 
         return {k: v for k, v in batch.items() if self.input_filter(k)}
+
+    @staticmethod
+    def get_eg(
+        batch: Batch, idx: int, filter_op: Optional[Callable] = None
+    ) -> Dict[str, Any]:
+        return get_batch_eg(batch=batch, idx=idx, filter_op=filter_op)
 
     def _check_cached_fingerprint(
         self,
@@ -575,25 +310,13 @@ class Pipe(Component):
         fingerprint_kwargs_exclude: Optional[List[str]] = None,
         debug: bool = True,
     ):
-        """This method checks if the cached fingerprint is the same as the current one and save
+        """
+        This method checks if the cached fingerprint is the same as the current one and save
         the current one. The cached fingerprint is based on the `Pipe.fingerprint()`,
         `Dataset._fingerprint` and `get_fingerprint(kwargs)`, kwargs matching
         `fingerprint_kwargs_exclude` are exlucded.
 
-        Args:
-          cache_dir: Path to the cache directory
-          dataset: Dataset to process
-          kwargs: Additional attributes passed to the pipe
-          debug:
-          cache_dir: PathLike:
-          dataset: Dataset:
-          kwargs: Optional[Dict]:  (Default value = None)
-          fingerprint_kwargs_exclude: Optional[List[str]]:  (Default value = None)
-          debug: bool:  (Default value = True)
-
-        Returns:
-
-
+        TODO: remove this.
         """
 
         if cache_dir is None:
@@ -656,3 +379,10 @@ class Pipe(Component):
             logger.info(f"No previous fingerprint found for {name}. file={file}")
 
         file.write_text(json.dumps(fingerprints, indent=2))
+
+    @classmethod
+    def instantiate_test(cls, **kwargs) -> "Pipe":
+        """Instantiate a simple `Pipe` object for testing purposes."""
+        raise NotImplementedError(
+            f"`.instantiate_test_pipe()` is not implemented for {type(cls).__name__}"
+        )
