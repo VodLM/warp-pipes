@@ -1,1 +1,3 @@
-# warp-pipes
+# Warp Pipes
+
+![Pipes banner](assets/header.png)
