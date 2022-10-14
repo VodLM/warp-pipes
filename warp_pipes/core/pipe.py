@@ -123,16 +123,6 @@ class Pipe(Fingerprintable):
 
         return output
 
-    def log_exception(self, e: Exception):
-        log_dir = Path("warp-pipes.log")
-        log_dir.mkdir(exist_ok=True, parents=True)
-        log_file = log_dir / f"pipe-error-{type(self).__name__}-{os.getpid()}.log"
-        logger.warning(
-            f"Error in {type(self).__name__}. See full stack in {log_file.absolute()}"
-        )
-        with open(log_file, "w") as f:
-            f.write(stackprinter.format())
-
     @__call__.register(list)
     def _(self, examples: List[Eg], idx: Optional[List[int]] = None, **kwargs) -> Batch:
         """Apply the pipe to a list of examples. Typically used to concatenate examples."""
@@ -308,6 +298,23 @@ class Pipe(Fingerprintable):
 
         return {k: v for k, v in batch.items() if self.input_filter(k)}
 
+    def log_exception(self, e: Exception):
+        log_dir = Path("warp-pipes.log")
+        log_dir.mkdir(exist_ok=True, parents=True)
+        log_file = log_dir / f"pipe-error-{type(self).__name__}-{os.getpid()}.log"
+        logger.warning(
+            f"Error in {type(self).__name__}. See full stack in {log_file.absolute()}"
+        )
+        with open(log_file, "w") as f:
+            f.write(stackprinter.format())
+
+    @classmethod
+    def instantiate_test(cls, **kwargs) -> "Pipe":
+        """Instantiate a simple `Pipe` object for testing purposes."""
+        raise NotImplementedError(
+            f"`.instantiate_test()` is not implemented for {type(cls).__name__}"
+        )
+
     @staticmethod
     def get_eg(
         batch: Batch, idx: int, filter_op: Optional[Callable] = None
@@ -391,10 +398,3 @@ class Pipe(Fingerprintable):
             logger.info(f"No previous fingerprint found for {name}. file={file}")
 
         file.write_text(json.dumps(fingerprints, indent=2))
-
-    @classmethod
-    def instantiate_test(cls, **kwargs) -> "Pipe":
-        """Instantiate a simple `Pipe` object for testing purposes."""
-        raise NotImplementedError(
-            f"`.instantiate_test_pipe()` is not implemented for {type(cls).__name__}"
-        )
