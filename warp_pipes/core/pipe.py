@@ -124,7 +124,9 @@ class Pipe(Fingerprintable):
         return output
 
     def log_exception(self, e: Exception):
-        log_file = Path(f"pipe-error-{type(self).__name__}-{os.getpid()}.log")
+        log_dir = Path("warp-pipes.log")
+        log_dir.mkdir(exist_ok=True, parents=True)
+        log_file = log_dir / f"pipe-error-{type(self).__name__}-{os.getpid()}.log"
         logger.warning(
             f"Error in {type(self).__name__}. See full stack in {log_file.absolute()}"
         )
