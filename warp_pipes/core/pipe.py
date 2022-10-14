@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from abc import ABCMeta
 from abc import abstractmethod
 from copy import copy
@@ -20,6 +21,7 @@ from typing import T
 from os import PathLike
 
 import re
+import stackprinter
 import datasets
 import jsondiff
 import rich
@@ -116,10 +118,18 @@ class Pipe(Fingerprintable):
                 output = batch
 
         except Exception as e:
-            logger.exception(e)
+            self.log_exception(e)
             raise e
 
         return output
+
+    def log_exception(self, e: Exception):
+        log_file = Path(f"pipe-error-{type(self).__name__}-{os.getpid()}.log")
+        logger.warning(
+            f"Error in {type(self).__name__}. See full stack in {log_file.absolute()}"
+        )
+        with open(log_file, "w") as f:
+            f.write(stackprinter.format())
 
     @__call__.register(list)
     def _(self, examples: List[Eg], idx: Optional[List[int]] = None, **kwargs) -> Batch:
@@ -143,7 +153,7 @@ class Pipe(Fingerprintable):
             # process the batch
             output = self._call_egs(_egs, idx=idx, **kwargs)
         except Exception as e:
-            logger.exception(e)
+            self.log_exception(e)
             raise e
 
         return output
