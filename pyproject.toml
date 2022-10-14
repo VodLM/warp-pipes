@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "warp-pipes"
+version = "0.1.0"
+description = "Simple deterministic and multi-threaded pipelines."
+authors = ["Valentin Liévin <valentin.lievin@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+numpy = "^1.23.4"
+torch = "^1.12.1"
+datasets = "^2.6.0"
+omegaconf = "^2.2.3"
+rich = "^12.6.0"
+loguru = "^0.6.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+black = {version = "^22.10.0", allow-prereleases = true}
+pre-commit = "^2.20.0"
+ipykernel = "^6.16.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
