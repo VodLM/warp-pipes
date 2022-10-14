@@ -8,7 +8,6 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import Union
 
 import dill
 import rich
@@ -48,7 +47,7 @@ class Fingerprintable(object):
     """
 
     __metaclass__ = ABCMeta
-    no_fingerprint: Optional[List[str]] = None
+    no_fingerprint: Optional[List[str]] = ["id"]
 
     def __init__(self, *, id: Optional[str] = None, **kwargs):
         """
@@ -57,15 +56,23 @@ class Fingerprintable(object):
         """
         self.id = id
 
-    def dill_inspect(self, reduce=True) -> bool | Dict[str, bool]:
+    def dill_inspect(
+        self, reduce=True, exclude_non_fingerprintable: bool = False
+    ) -> bool | Dict[str, bool]:
         """Inspect whether the object can be serialized using dill.
 
         Args:
-          reduce: (:obj:`bool`, optional): test the whole object or test all leaves separately and return the corresponding JSON structure.
+          reduce: (:obj:`bool`, optional): test the whole object or test all
+            leaves separately and return the corresponding JSON structure.
+          exclude_non_fingerprintable: (:obj:`bool`, optional): exclude the `no_fingerprint`
+            attributes is set to True
 
         Returns:
-            :obj:`dict`: if `reduce=False`, return a JSON-like structure of booleans indicating whether each leaf can be serialized.
-            :obj:`bool`: if `reduce=True`, return a boolean indicating whether the object can be serialized.
+            :obj:`dict`: if `reduce=False`, return a JSON-like structure of booleans indicating
+            whether each leaf can be serialized.
+            :obj:`bool`: if `reduce=True`, return a boolean indicating whether the object can
+            be serialized.
+
         """
 
         def safe_pickles(v: Any, key: str, excluded_keys=List[str]) -> str:
@@ -81,7 +88,7 @@ class Fingerprintable(object):
         if reduce:
             return dill.pickles(self)
         else:
-            data = self.to_json_struct()
+            data = self.to_json_struct(exclude_non_fingerprintable=False)
             safe_pickles_ = partial(safe_pickles, excluded_keys=["__name__"])
             return apply_to_json_struct(data, safe_pickles_)
 
@@ -95,18 +102,23 @@ class Fingerprintable(object):
     @staticmethod
     def safe_fingerprint(x: Any, reduce: bool = True) -> Dict | str:
         if isinstance(x, Fingerprintable):
-            return x.fingerprint(reduce=reduce)
+            return x.get_fingerprint(reduce=reduce)
         else:
             return Fingerprintable._fingerprint(x)
 
-    def fingerprint(
-        self,
-        reduce=True,
-    ) -> str | Dict[str, Any]:
-        """Return a fingerprint of the object. All attributes stated in `no_fingerprint` are excluded.
+    @property
+    def fingerprint(self) -> str:
+        """Return a fingerprint of the object.
+        All attributes stated in `no_fingerprint` are excluded.
+        """
+        return self.get_fingerprint(reduce=True)
 
-        TODO: Future versions: fingerprint the class attributes as well.
-         This might be done using `include_class_attributes` with `get_attributes_dict`.
+    def get_fingerprint(
+        self,
+        reduce=False,
+    ) -> str | Dict[str, Any]:
+        """Return a fingerprint of the object.
+        All attributes stated in `no_fingerprint` are excluded.
 
         Args:
           reduce (:obj:`bool`, optional): if `True`, return a string fingerprint of the object,
@@ -128,7 +140,7 @@ class Fingerprintable(object):
         of the object, and exclude all parameters stated in `no_fingerprint`
 
         """
-        data = self.to_json_struct(fingerprint_mode=True)
+        data = self.to_json_struct(exclude_non_fingerprintable=True)
 
         def maybe_get_fingerprint(v: Any, key: str) -> str:
             if key == "__name__":
@@ -150,18 +162,21 @@ class Fingerprintable(object):
         exclude_no_recursive: Optional[List[str]] = None,
         include_only: Optional[List[str]] = None,
         include_class_attributes: bool = False,
-        fingerprint_mode: bool = False,
+        exclude_non_fingerprintable: bool = False,
         **kwargs,
     ) -> Dict[str, Any]:
         """Return a dictionary representation of the object.
 
         Args:
-          append_self (:obj:`bool`, optional): if `True`, append the object itself to the dictionary with key `__self__`
+          append_self (:obj:`bool`, optional): if `True`, append the object
+            itself to the dictionary with key `__self__`
           exclude (`List[str]`, optional): exclude these attributes from the dictionary (key names)
-          exclude_no_recursive: (`List[str]`, optional): exclude these attributes from the dictionary (key names) but do not exclude their children
-          include_only (`List[str]`, optional): include only these attributes in the dictionary (key names)
-          include_class_attributes (:obj:`bool`, optional): include the class attributes in the dictionary
-          fingerprint_mode (`bool`, optional): if `True`, extend the exclude list with `no_fingerprint`
+          exclude_no_recursive: (`List[str]`, optional): exclude these attributes from the
+            dictionary (key names) but do not exclude their children
+          include_only (`List[str]`, optional): include only these attributes in the dictionary
+          include_class_attributes (:obj:`bool`, optional): include the class attributes in the dict
+          exclude_non_fingerprintable (`bool`, optional): if `True`, extend the exclude
+            list with `no_fingerprint`
           **kwargs:
 
         Returns:
@@ -171,7 +186,7 @@ class Fingerprintable(object):
             "exclude": exclude,
             "include_only": include_only,
             "include_class_attributes": include_class_attributes,
-            "fingerprint_mode": fingerprint_mode,
+            "exclude_non_fingerprintable": exclude_non_fingerprintable,
             **kwargs,
         }
         attributes = self._get_attributes(
@@ -184,18 +199,23 @@ class Fingerprintable(object):
         if exclude_no_recursive is None:
             exclude_no_recursive = []
 
-        if fingerprint_mode and self.no_fingerprint is not None:
+        if exclude_non_fingerprintable and self.no_fingerprint is not None:
             exclude_no_recursive.extend(self.no_fingerprint)
 
         exclude = exclude + exclude_no_recursive
 
+        # output data
         data = {"__name__": type(self).__name__, **attributes}
         if append_self:
             data["__self__"] = self
-        data = {k: v for k, v in data.items() if not (k == "id" and v is None)}
+
+        # filter data
+        data = {k: v for k, v in data.items() if v is not None}
         data = {k: v for k, v in data.items() if k not in exclude}
         if include_only is not None:
             data = {k: v for k, v in data.items() if k in include_only}
+
+        # apply the function to the leaf
         data = {k: leaf_to_json_struct(v, **kwargs) for k, v in data.items()}
         return data
 
