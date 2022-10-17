@@ -105,10 +105,8 @@ def test_process_egs(inputs: Tuple[List[Eg], Batch, Dict[str, Any]]):
     "inputs",
     [
         (
-            datasets.load_dataset("nateraw/dummy-csv-dataset", keep_in_memory=True)[
-                "train"
-            ],
-            {DummyPipe.output_key: ["abc-1", "abc-2", "abc-1", "abc-2"]},
+            datasets.Dataset.from_dict({"a": [1, 2, 3, 4], "b": [5, 6, 7,8]}),
+            {DummyPipe.output_key: ["ab-1", "ab-2", "ab-1", "ab-2"]},
             {"update": False, "input_filter": None},
         ),
     ],
@@ -129,7 +127,9 @@ def test_process_dataset(inputs: Tuple[datasets.Dataset, Batch, Dict[str, Any]])
     "inputs",
     [
         (
-            datasets.load_dataset("nateraw/dummy-csv-dataset", keep_in_memory=True),
+            datasets.DatasetDict(
+                {"train": datasets.Dataset.from_dict({"a": [1, 2, 3], "b": [4, 5, 6]})}
+            ),
             None,
             {"update": False, "input_filter": None},
         ),
@@ -162,23 +162,3 @@ def test_Pipe_num_proc():
     sub_sub_pipe._max_num_proc = 1
     sub_pipe.sub_pipe = sub_sub_pipe
     assert pipe.max_num_proc == 1
-
-
-@pytest.mark.parametrize("subclass", Pipe.__subclasses__())
-def test_subclasses_pickle_fingerprint(subclass):
-    """Test that all the subclasses of `Pipe` can be pickled,
-    unpickled, and have deterministic fingerprint"""
-    rich.print(subclass)
-    subclass_instance = subclass.instantiate_test()
-
-    # dill inspect
-    if not dill.pickles(subclass_instance):
-        raise ValueError(f"{subclass} is not pickleable")
-
-    # pickle / unpickle
-    buffer = pickle.dumps(subclass_instance)
-    subclass_instance_copy = pickle.loads(buffer)
-
-    # fingerprint
-    if subclass.instantiate_test().fingerprint != subclass_instance_copy.fingerprint:
-        raise ValueError(f"{subclass} fingerprint is not deterministic.")
