@@ -38,19 +38,32 @@ PREDICT_VECTOR_NAME = "vector"
 def make_ts_config(
     path: PathLike,
     dset_shape: List[int],
+    chunk_size: int = 100,
+    driver: str = "zarr",
+    dtype: str = "float32",
 ):
+    driver_meta = {
+        "n5": {
+            "dataType": dtype,
+            "dimensions": dset_shape,
+            "compression": {"type": "gzip"},
+            "blockSize": [chunk_size, *dset_shape[1:]],
+        },
+        "zarr": {
+            "dtype": {"float16": "<f2", "float32": "<f4", "float64": "<f8"}[dtype],
+            "shape": dset_shape,
+            "chunks": [chunk_size, *dset_shape[1:]],
+        },
+    }
 
     return {
-        "driver": "n5",
+        "driver": driver,
         "kvstore": {
             "driver": "file",
             "path": str(path),
         },
         "metadata": {
-            "compression": {"type": "gzip"},
-            "dataType": "float32",
-            "dimensions": dset_shape,
-            "blockSize": [100, *dset_shape[1:]],
+            **driver_meta[driver],
         },
     }
 
@@ -66,6 +79,8 @@ def cache_or_load_vectors(
     loader_kwargs: Optional[Dict] = None,
     cache_dir: Optional[str] = None,
     target_file: Optional[PathLike] = None,
+    driver: str = "zarr",
+    dtype: str = "float32",
 ) -> ts.TensorStore:
     """Process a `Dataset` using a model and cache the results into a `TensorStore`. If the cache
     already exists, it is loaded instead.
@@ -107,6 +122,8 @@ def cache_or_load_vectors(
             "model": get_fingerprint(model),
             "model_output_keys": model_output_keys,
             "dataset": dataset._fingerprint,
+            "driver": driver,
+            "dtype": dtype,
         }
     )
 
@@ -117,7 +134,7 @@ def cache_or_load_vectors(
     target_file = Path(target_file)
 
     # make tensorstore config and init the store
-    ts_config = make_ts_config(target_file, dset_shape)
+    ts_config = make_ts_config(target_file, dset_shape, driver=driver, dtype=dtype)
     if not target_file.exists():
         logger.info(f"Writing vectors to {target_file.absolute()}")
         store = ts.open(ts_config, create=True, delete_existing=False).result()
