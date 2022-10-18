@@ -95,6 +95,8 @@ def cache_or_load_vectors(
         loader_kwargs (:obj:`Dict`, optional): Keyword arguments for the DataLoader.
         cache_dir (:obj:`str`, optional): Directory to cache the vectors.
         target_file (:obj:`PathLike`, optional): Path to the target file.
+        driver (:obj:`str`, optional): Driver to use for the TensorStore ("zarr" or "n5").
+        dtype (:obj:`str`, optional): Data type to use for the TensorStore ("float16", "float32").
 
     Returns:
         ts.TensorStore: cached dataset vectors
