@@ -12,7 +12,11 @@ from warp_pipes.support.datastruct import Batch
 
 
 class ExtractPassages(Pipe):
-    """Extract fixed-length passages from text documents."""
+    """
+    Extract fixed-length passages from text documents.
+
+    TODO: refactor.
+    """
 
     required_keys = [
         "document.input_ids",
@@ -237,6 +241,17 @@ class ExtractPassages(Pipe):
         """
         indexes = [x for idxes_tok in offset_mapping for x in idxes_tok if x >= 0]
         return document[min(indexes) : max(indexes)]
+
+    @classmethod
+    def instantiate_test(cls, **kwargs) -> "Pipe":
+        return cls(
+            size=10,
+            stride=10,
+            start_tokens=[0],
+            end_tokens=[0],
+            pad_token_id=0,
+            **kwargs,
+        )
 
 
 def gen_passages(
