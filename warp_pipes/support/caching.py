@@ -23,9 +23,9 @@ from torch.utils.data import DataLoader
 from torch.utils.data import Dataset as TorchDataset
 from tqdm import tqdm
 
-from warp_pipes.pipes import Collate
-from warp_pipes.pipes import Parallel
-from warp_pipes.pipes import Pipe
+from warp_pipes.core.pipe import Pipe
+from warp_pipes.pipes.collate import Collate
+from warp_pipes.pipes.pipelines import Parallel
 from warp_pipes.support.datastruct import Batch
 from warp_pipes.support.fingerprint import get_fingerprint
 from warp_pipes.support.tensorstore_callback import IDX_COL

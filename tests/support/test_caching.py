@@ -1,50 +1,15 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Optional
 import pytest
 
-from pathlib import Path
 import tensorstore as ts
 import datasets
 import numpy as np
-import string
-import rich
-import random
 import torch
 import tempfile
-from torch import nn
-from warp_pipes.pipes.collate import Collate
-from warp_pipes.support.datastruct import Batch
-from warp_pipes.support.shapes import infer_batch_size
 from warp_pipes.support.caching import cache_or_load_vectors
-from warp_pipes.support.tensorstore_callback import IDX_COL
-
-
-class DummyModel(nn.Module):
-    def __init__(
-        self,
-        hdim: int = 8,
-        input_key: Optional[str] = None,
-        output_key: Optional[str] = None,
-    ) -> None:
-        super().__init__()
-        self.hdim = hdim
-        self.linear = nn.Linear(hdim, hdim)
-        self.input_key = input_key
-        self.output_key = output_key
-
-    def forward(self, batch: Batch) -> torch.Tensor:
-        if self.input_key is not None:
-            batch = batch[self.input_key]
-
-        output = self.linear(batch)
-
-        if self.output_key is not None:
-            output = {self.output_key: output}
-
-        return output
-
+from tests.utils.dummy_model import DummyModel
 
 base_cfg = {
     "driver": "zarr",
