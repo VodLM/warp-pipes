@@ -57,7 +57,7 @@ def test_cache_or_load_vectors(cfg):
             dataset,
             model,
             # trainer: Optional[Trainer] = None,
-            model_output_keys=[cfg["output_key"]]
+            model_output_key=cfg["output_key"]
             if cfg["output_key"] is not None
             else None,
             collate_fn=partial(collate_fn, input_key=cfg["input_key"]),

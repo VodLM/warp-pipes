@@ -4,5 +4,5 @@ from .nesting import *  # noqa: F403
 from .passages import *  # noqa: F403
 from .pipelines import *  # noqa: F403
 from .pprint import *  # noqa: F403
-from .predict import PredictWithoutCache  # noqa: F403
+from .predict import *  # noqa: F403
 from .tokenizer import *  # noqa: F403

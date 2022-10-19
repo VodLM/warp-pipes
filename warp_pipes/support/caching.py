@@ -29,7 +29,7 @@ from warp_pipes.pipes.pipelines import Parallel
 from warp_pipes.support.datastruct import Batch
 from warp_pipes.support.fingerprint import get_fingerprint
 from warp_pipes.support.tensorstore_callback import IDX_COL
-from warp_pipes.support.tensorstore_callback import select_field_from_output
+from warp_pipes.support.tensorstore_callback import select_key_from_output
 from warp_pipes.support.tensorstore_callback import TensorStoreCallback
 
 DEFAULT_LOADER_KWARGS = {"batch_size": 10, "num_workers": 2, "pin_memory": True}
@@ -75,7 +75,7 @@ def cache_or_load_vectors(
     model: Callable | nn.Module | LightningModule,
     *,
     trainer: Optional[Trainer] = None,
-    model_output_keys: Optional[List[str]] = None,
+    model_output_key: Optional[str] = None,
     collate_fn: Optional[Pipe | Callable] = None,
     loader_kwargs: Optional[Dict] = None,
     cache_dir: Optional[str] = None,
@@ -91,7 +91,7 @@ def cache_or_load_vectors(
         model (:obj:`Callable` | :obj:`nn.Module` | :obj:`LightningModule`): Model to use to
             compute the vectors.
         trainer (:obj:`Trainer`, optional): Trainer to use to compute the vectors.
-        model_output_keys (:obj:`List[str]`, optional): List of keys to select from the model output
+        model_output_key (:obj:`str`, optional): List of keys to select from the model output
         collate_fn (:obj:`Pipe` | :obj:`Callable`, optional): Collate function for the DataLoader.
         loader_kwargs (:obj:`Dict`, optional): Keyword arguments for the DataLoader.
         cache_dir (:obj:`str`, optional): Directory to cache the vectors.
@@ -115,7 +115,7 @@ def cache_or_load_vectors(
     dset_shape = _infer_dset_shape(
         dataset,
         model,
-        model_output_keys=model_output_keys,
+        model_output_key=model_output_key,
         collate_fn=collate_fn,
     )
 
@@ -123,7 +123,7 @@ def cache_or_load_vectors(
     fingerprint = get_fingerprint(
         {
             "model": get_fingerprint(model),
-            "model_output_keys": model_output_keys,
+            "model_output_key": model_output_key,
             "dataset": dataset._fingerprint,
             "driver": driver,
             "dtype": dtype,
@@ -142,12 +142,15 @@ def cache_or_load_vectors(
         logger.info(f"Writing vectors to {target_file.absolute()}")
         store = ts.open(ts_config, create=True, delete_existing=False).result()
         with open(target_file / "config.json", "w") as f:
-            json.dump(ts_config, f)
+            ts_config_ = {
+                k: v for k, v in ts_config.items() if k in ["driver", "kvstore"]
+            }
+            json.dump(ts_config_, f)
 
         # init a callback to store predictions in the TensorStore
         tensorstore_callback = TensorStoreCallback(
             store=store,
-            accepted_fields=model_output_keys,
+            output_key=model_output_key,
         )
         _process_dataset_with_lightning(
             dataset=dataset,
@@ -160,13 +163,13 @@ def cache_or_load_vectors(
 
     else:
         logger.info(f"Loading pre-computed vectors from {target_file.absolute()}")
-        store = ts.open(ts_config, write=False, read=True).result()
+        store = ts.open(ts_config, write=False, read=True)
         _validate_store(store, dset_shape, target_file)
 
     return store
 
 
-def load_store(
+async def load_store(
     path: PathLike,
     read: bool = True,
     write: bool = False,
@@ -176,7 +179,13 @@ def load_store(
     path = Path(path)
     with open(path / "config.json", "r") as f:
         ts_config = json.load(f)
-    return ts.open(ts_config, read=read, write=write, **kwargs).result()
+    store = await ts.open(ts_config, read=read, write=write, **kwargs)
+    return store
+
+
+def infer_path_from_store(store: ts.TensorStore) -> Path:
+    path = store.spec().kvstore.path
+    return Path(path)
 
 
 def _validate_store(
@@ -300,7 +309,7 @@ def _infer_dset_shape(
     dataset: Dataset,
     model: LightningModule,
     collate_fn: Callable,
-    model_output_keys: Optional[List[str]],
+    model_output_key: Optional[str],
 ) -> List[int]:
     """
     Infer the dataset shape by running the model on a single batch.
@@ -308,5 +317,5 @@ def _infer_dset_shape(
     batch = collate_fn([dataset[0]])
     batch = move_data_to_device(batch, model.device)
     output = model(batch)
-    vector_shape = select_field_from_output(output, model_output_keys).shape[1:]
+    vector_shape = select_key_from_output(output, model_output_key).shape[1:]
     return [len(dataset), *vector_shape]

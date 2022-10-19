@@ -29,25 +29,15 @@ def write_vectors(
         store[idx] = vectors
 
 
-def select_field_from_output(
-    batch: Batch, fields: Optional[List[str]] = None
-) -> torch.Tensor:
-    if fields is None:
+def select_key_from_output(batch: Batch, key: Optional[str] = None) -> torch.Tensor:
+    if key is None:
         if isinstance(batch, dict):
             raise TypeError(
-                "Input batch is a ditionary, the argument `fields`must be set."
+                "Input batch is a ditionary, the argument `field`must be set."
             )
         return batch
 
-    batch_keys = list(batch.keys())
-    avail_fields = [k for k in batch_keys if k in fields]
-    if len(avail_fields) != 1:
-        raise ValueError(
-            f"One and only one field in {fields} must be provided, "
-            f"founds keys={batch_keys})."
-        )
-    vector = [v for k, v in batch.items() if k in fields][0]
-    return vector
+    return batch[key]
 
 
 class TensorStoreCallback(Callback):
@@ -56,11 +46,11 @@ class TensorStoreCallback(Callback):
     def __init__(
         self,
         store: ts.TensorStore,
-        accepted_fields: Optional[List[str]] = None,
+        output_key: Optional[str] = None,
         asynch: bool = False,
     ):
         self.store = store
-        self.accepted_fields = accepted_fields
+        self.output_key = output_key
         self.asynch = asynch
 
     def on_predict_batch_end(
@@ -73,5 +63,5 @@ class TensorStoreCallback(Callback):
         dataloader_idx: int,
     ) -> None:
         """store the outputs of the prediction step to the cache"""
-        vectors = select_field_from_output(outputs, self.accepted_fields)
+        vectors = select_key_from_output(outputs, self.output_key)
         write_vectors(self.store, vectors=vectors, idx=batch.get(IDX_COL, None))
