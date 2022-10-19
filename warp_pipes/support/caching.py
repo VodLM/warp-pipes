@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from os import PathLike
 from pathlib import Path
 from typing import Any
@@ -111,7 +112,7 @@ def cache_or_load_vectors(
     assert isinstance(model, LightningModule), msg
 
     # infer the vector size from the model output
-    dset_shape = infer_dset_shape(
+    dset_shape = _infer_dset_shape(
         dataset,
         model,
         model_output_keys=model_output_keys,
@@ -140,13 +141,15 @@ def cache_or_load_vectors(
     if not target_file.exists():
         logger.info(f"Writing vectors to {target_file.absolute()}")
         store = ts.open(ts_config, create=True, delete_existing=False).result()
+        with open(target_file / "config.json", "w") as f:
+            json.dump(ts_config, f)
 
         # init a callback to store predictions in the TensorStore
         tensorstore_callback = TensorStoreCallback(
             store=store,
             accepted_fields=model_output_keys,
         )
-        process_dataset_with_lightning(
+        _process_dataset_with_lightning(
             dataset=dataset,
             model=model,
             tensorstore_callback=tensorstore_callback,
@@ -158,12 +161,25 @@ def cache_or_load_vectors(
     else:
         logger.info(f"Loading pre-computed vectors from {target_file.absolute()}")
         store = ts.open(ts_config, write=False, read=True).result()
-        validate_store(store, dset_shape, target_file)
+        _validate_store(store, dset_shape, target_file)
 
     return store
 
 
-def validate_store(
+def load_store(
+    path: PathLike,
+    read: bool = True,
+    write: bool = False,
+    **kwargs,
+) -> ts.TensorStore:
+    """Load a TensorStore from a path."""
+    path = Path(path)
+    with open(path / "config.json", "r") as f:
+        ts_config = json.load(f)
+    return ts.open(ts_config, read=read, write=write, **kwargs).result()
+
+
+def _validate_store(
     store: ts.TensorStore,
     dset_shape: List[int],
     target_file: PathLike,
@@ -189,7 +205,7 @@ def validate_store(
             )
 
 
-def process_dataset_with_lightning(
+def _process_dataset_with_lightning(
     dataset: Dataset,
     model: LightningModule,
     *,
@@ -204,7 +220,7 @@ def process_dataset_with_lightning(
     trainer.callbacks.append(tensorstore_callback)
 
     # init the dataloader (the collate_fn and dataset are wrapped to return the ROW_IDX)
-    loader = init_loader(dataset, collate_fn=collate_fn, loader_kwargs=loader_kwargs)
+    loader = _init_loader(dataset, collate_fn=collate_fn, loader_kwargs=loader_kwargs)
 
     # run the trainer predict method, model.forward() is called
     # for each batch and store into the callback cache
@@ -246,7 +262,7 @@ class AddRowIdx(TorchDataset):
         return batch
 
 
-def init_loader(
+def _init_loader(
     dataset: Dataset,
     collate_fn: Optional[Callable] = None,
     loader_kwargs: Optional[Dict] = None,
@@ -275,32 +291,12 @@ def _wrap_collate_fn(collate_fn: Callable) -> Pipe:
     return Parallel(collate_fn, Collate(IDX_COL))
 
 
-def _wrap_dataloader(loader: DataLoader) -> DataLoader:
-    """
-    Return a copy of the original dataset such that the `dataset` and `collate_fn` are
-    updated such as to return the field `ROW_IDX` along the original data.
-    """
-    if isinstance(loader.dataset, AddRowIdx):
-        return loader
-
-    def exclude(k):
-        excluded_values = ["dataset", "collate_fn", "sampler", "batch_sampler"]
-        return k in excluded_values or k.startswith("_")
-
-    args = {k: v for k, v in loader.__dict__.items() if not exclude(k)}
-    return DataLoader(
-        dataset=_wrap_dataset(loader.dataset),
-        collate_fn=_wrap_collate_fn(loader.collate_fn),
-        **args,
-    )
-
-
 def _wrap_dataset(dataset: Dataset) -> TorchDataset:
     """Wrap the dataset to return IDX_COL along the batch values"""
     return AddRowIdx(dataset)
 
 
-def infer_dset_shape(
+def _infer_dset_shape(
     dataset: Dataset,
     model: LightningModule,
     collate_fn: Callable,
