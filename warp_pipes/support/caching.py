@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from os import PathLike
 from pathlib import Path
 from typing import Any
@@ -160,27 +161,43 @@ def cache_or_load_vectors(
             collate_fn=collate_fn,
             loader_kwargs=loader_kwargs,
         )
-
+        del store
     else:
         logger.info(f"Loading pre-computed vectors from {target_file.absolute()}")
-        store = ts.open(ts_config, write=False, read=True)
-        _validate_store(store, dset_shape, target_file)
+
+    # reload the same TensorStore in read mode
+    store = load_store(target_file, read=True, write=False)
+    _validate_store(store, dset_shape, target_file)
 
     return store
 
 
-async def load_store(
-    path: PathLike,
+def load_store(
+    path: PathLike | Dict,
     read: bool = True,
     write: bool = False,
+    use_pdb: bool = False,
     **kwargs,
 ) -> ts.TensorStore:
     """Load a TensorStore from a path."""
-    path = Path(path)
-    with open(path / "config.json", "r") as f:
-        ts_config = json.load(f)
-    store = await ts.open(ts_config, read=read, write=write, **kwargs)
-    return store
+    if isinstance(path, dict):
+        ts_config = path
+    else:
+        path = Path(path)
+        with open(path / "config.json", "r") as f:
+            ts_config = json.load(f)
+
+    logger.info(f"> loading (pid={os.getpid()}) {ts_config}...")
+    if use_pdb:
+        import remote_pdb
+
+        remote_pdb.set_trace()
+    return ts.open(ts_config, read=read, write=write, **kwargs).result()
+
+
+def load_store_test_(c):
+    store = load_store(c)
+    return store.shape
 
 
 def infer_path_from_store(store: ts.TensorStore) -> Path:

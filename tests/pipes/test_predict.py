@@ -1,13 +1,16 @@
 import tempfile
 import pytest
 import rich
+from copy import copy
 import numpy as np
+import stackprinter
+import sys
 import dill
 import torch
 import datasets
 from tests.utils.dummy_model import DummyModel
 from warp_pipes.pipes import PredictWithoutCache, PredictWithCache
-from warp_pipes.pipes.basics import ApplyToAll
+from warp_pipes.pipes.basics import ApplyToAll, Identity
 from warp_pipes.pipes.pipelines import Sequential
 from warp_pipes.support.pretty import pprint_batch
 
@@ -19,6 +22,8 @@ base_cfg = {
 data = np.random.randn(100, 8).astype(np.float32)
 batch = {base_cfg["input_key"]: data}
 dataset = datasets.Dataset.from_dict(batch)
+dataset.save_to_disk("cache/toy_dset.dset")
+dataset = datasets.load_from_disk("cache/toy_dset.dset", keep_in_memory=False)
 model = DummyModel(
     data.shape[1], input_key=base_cfg["input_key"], output_key=base_cfg["output_key"]
 )
@@ -42,36 +47,37 @@ def collate_fn(egs, input_key="data", **kwargs):
 @pytest.mark.parametrize(
     "cfg",
     [
-        # {
-        #     **base_cfg,
-        #     "input": batch,
-        #     "output": batch_preds,
-        #     "call_kwargs": {"idx": list(range(len(data)))},
-        # },
-        # {
-        #     **base_cfg,
-        #     "input": dataset,
-        #     "output": dataset_preds,
-        #     "call_kwargs": {"batch_size": 10, "num_proc": 1},
-        # },
+        {
+            **base_cfg,
+            "input": batch,
+            "output": batch_preds,
+            "call_kwargs": {"idx": list(range(len(data)))},
+        },
         {
             **base_cfg,
             "input": dataset,
             "output": dataset_preds,
-            "call_kwargs": {"batch_size": 10, "num_proc": 2},
+            "call_kwargs": {"batch_size": 10, "num_proc": 1},
         },
+        # TODO: fix multiprocessing (hangs when using `ts.open(..).result()` in `PredictWithCache`)
         # {
         #     **base_cfg,
-        #     "input": datasets.DatasetDict({"train": dataset}),
-        #     "output": datasets.DatasetDict({"train": dataset_preds}),
-        #     "call_kwargs": {"batch_size": 10, "num_proc": 1},
+        #     "input": dataset,
+        #     "output": dataset_preds,
+        #     "call_kwargs": {"batch_size": 10, "num_proc": 2},
         # },
+        {
+            **base_cfg,
+            "input": datasets.DatasetDict({"train": dataset}),
+            "output": datasets.DatasetDict({"train": dataset_preds}),
+            "call_kwargs": {"batch_size": 10, "num_proc": 1},
+        },
     ],
 )
 @pytest.mark.parametrize(
     "model_info",
     [
-        # (PredictWithoutCache, {}),
+        (PredictWithoutCache, {}),
         (
             PredictWithCache,
             {
@@ -86,6 +92,8 @@ def collate_fn(egs, input_key="data", **kwargs):
 )
 def test_predict_pipes(cfg, model_info):
     """Test PredictWithoutCache."""
+    cfg = copy(cfg)
+    model_info = copy(model_info)
     Cls, kwargs = model_info
     with tempfile.TemporaryDirectory() as cache_dir:
 
@@ -101,7 +109,7 @@ def test_predict_pipes(cfg, model_info):
             cache_fingerprint = predict_pipe.cache(dataset)
             cfg["call_kwargs"]["cache_fingerprint"] = cache_fingerprint
 
-
+        # test pickling
         if not dill.pickles(predict_pipe):
             raise ValueError("predict_pipe does not pickle")
 
@@ -123,11 +131,6 @@ def test_predict_pipes(cfg, model_info):
             assert cfg["output"].column_names == output.column_names
             for k in cfg["output"].column_names:
                 assert cfg["output"][k] == output[k]
-            #     pprint_batch({ "input": cfg["output"][k], "output": output[k] }, header=k)
-            #     if not cfg["output"][k] == output[k]:
-            #         rich.print(f"Failed: {k}")
-            #         for i in range(100):
-            #             rich.print(f"{i} : {cfg['output'][k][i]} != {output[k][i]}")
 
         else:
             raise TypeError(f"Unexpected type {type(cfg['output'])}")

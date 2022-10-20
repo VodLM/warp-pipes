@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+import os
+import random
 import tempfile
+import time
 from copy import copy
 from os import PathLike
 from pathlib import Path
@@ -83,6 +87,8 @@ class PredictWithCache(Pipe):
         self.stores: Dict[str, ts.TensorStore] = {}
 
         # get the argument for caching the dataset
+        if caching_kwargs is None:
+            caching_kwargs = {}
         if "model_output_key" not in caching_kwargs:
             raise ValueError(
                 "`model_output_key` must be provided in `caching_kwargs` to cache the predictions."
@@ -116,11 +122,8 @@ class PredictWithCache(Pipe):
             )
 
         store = self.stores[cache_fingerprint]
-        assert isinstance(store, ts.TensorStore)
-        # if isinstance(store, (str, Path)):
-        #     # TODO: should not happen. Remove this when the bug is fixed.
-        #     store = caching.load_store(store)
-        #     self.stores[cache_fingerprint] = store
+        if not isinstance(store, ts.TensorStore):
+            raise TypeError(f"store must be a TensorStore, got {type(store)}")
         cached_predictions = store[idx].read().result()
 
         return {self.model_output_key: cached_predictions}
@@ -218,25 +221,34 @@ class PredictWithCache(Pipe):
     def __getstate__(self):
         state = copy(super().__getstate__())
 
+        new_state_stores = {}
         for key, store in state["stores"].items():
             if isinstance(store, ts.TensorStore):
-                state["stores"][key] = str(
+                new_state_stores[key] = str(
                     caching.infer_path_from_store(store).absolute()
                 )
-
-        rich.print(f"> getstate: {state}")
+        state["stores"] = new_state_stores
 
         return state
 
     def __setstate__(self, state):
         state = copy(state)
 
-        rich.print(f"> setstate: {state}")
-
+        new_state_stores = {}
         for key, store_path in state["stores"].items():
-            state["stores"][key] = caching.load_store(store_path, read=True, open=True)
-
-        rich.print("> setstate: DONE")
-        rich.print(f">>>> setstate: {state['stores']}")
+            store = caching.load_store(store_path)
+            new_state_stores[key] = store
+        state["stores"] = new_state_stores
 
         super().__setstate__(state)
+
+    @classmethod
+    def instantiate_test(cls, **kwargs) -> "Pipe":
+        return cls(
+            Identity(),
+            caching_kwargs={
+                "cache_dir": str(),
+                "model_output_key": str(),
+            },
+            **kwargs,
+        )
