@@ -252,3 +252,40 @@ class PredictWithCache(Pipe):
             },
             **kwargs,
         )
+
+
+class Predict(PredictWithCache):
+    def __init__(
+        self,
+        model: pl.LightningModule | nn.Module | Callable,
+        requires_cache: bool = False,
+        **kwargs,
+    ):
+        super(Predict, self).__init__(model=model, **kwargs)
+        self.requires_cache = requires_cache
+
+    def _call_batch(
+        self,
+        batch: Batch,
+        idx: Optional[List[int]] = None,
+        cache_fingerprint: Optional[str] = None,
+        **kwargs,
+    ) -> Batch:
+
+        use_cache = self.requires_cache or cache_fingerprint in self.stores
+        if use_cache:
+            return PredictWithCache._call_batch(
+                self,
+                batch,
+                idx=idx,
+                cache_fingerprint=cache_fingerprint,
+                **kwargs,
+            )
+        else:
+            return PredictWithoutCache._call_batch(
+                self,
+                batch,
+                idx=idx,
+                cache_fingerprint=cache_fingerprint,
+                **kwargs,
+            )

@@ -9,7 +9,7 @@ import dill
 import torch
 import datasets
 from tests.utils.dummy_model import DummyModel
-from warp_pipes.pipes import PredictWithoutCache, PredictWithCache
+from warp_pipes.pipes import PredictWithoutCache, PredictWithCache, Predict
 from warp_pipes.pipes.basics import ApplyToAll, Identity
 from warp_pipes.pipes.pipelines import Sequential
 from warp_pipes.support.pretty import pprint_batch
@@ -77,7 +77,7 @@ def collate_fn(egs, input_key="data", **kwargs):
 @pytest.mark.parametrize(
     "model_info",
     [
-        (PredictWithoutCache, {}),
+        (PredictWithoutCache, {}, False),
         (
             PredictWithCache,
             {
@@ -87,6 +87,31 @@ def collate_fn(egs, input_key="data", **kwargs):
                     "loader_kwargs": {"batch_size": 10, "num_workers": 0},
                 },
             },
+            True,
+        ),
+        (
+            Predict,
+            {
+                "requires_cache": False,
+                "caching_kwargs": {
+                    "model_output_key": base_cfg["output_key"],
+                    "collate_fn": collate_fn,
+                    "loader_kwargs": {"batch_size": 10, "num_workers": 0},
+                },
+            },
+            False,
+        ),
+        (
+            Predict,
+            {
+                "requires_cache": True,
+                "caching_kwargs": {
+                    "model_output_key": base_cfg["output_key"],
+                    "collate_fn": collate_fn,
+                    "loader_kwargs": {"batch_size": 10, "num_workers": 0},
+                },
+            },
+            True,
         ),
     ],
 )
@@ -94,18 +119,18 @@ def test_predict_pipes(cfg, model_info):
     """Test PredictWithoutCache."""
     cfg = copy(cfg)
     model_info = copy(model_info)
-    Cls, kwargs = model_info
+    Cls, kwargs, cache_model = model_info
     with tempfile.TemporaryDirectory() as cache_dir:
 
-        if Cls == PredictWithCache:
+        if Cls in {PredictWithCache, Predict}:
             kwargs["caching_kwargs"]["cache_dir"] = cache_dir
 
         predict_pipe = Cls(model, **kwargs)
 
-        if isinstance(predict_pipe, PredictWithoutCache):
+        if not cache_model:
             predict_pipe = Sequential(ApplyToAll(torch.tensor), predict_pipe)
 
-        elif isinstance(predict_pipe, PredictWithCache):
+        else:
             cache_fingerprint = predict_pipe.cache(dataset)
             cfg["call_kwargs"]["cache_fingerprint"] = cache_fingerprint
 
@@ -125,7 +150,9 @@ def test_predict_pipes(cfg, model_info):
         if isinstance(cfg["output"], dict):
             assert cfg["output"].keys() == output.keys()
             for k in cfg["output"].keys():
-                assert np.allclose(cfg["output"][k], output[k], rtol=1.e-2, atol=1.e-2)
+                assert np.allclose(
+                    cfg["output"][k], output[k], rtol=1.0e-2, atol=1.0e-2
+                )
 
         elif isinstance(cfg["output"], datasets.Dataset):
             assert cfg["output"].column_names == output.column_names
