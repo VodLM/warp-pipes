@@ -198,7 +198,6 @@ class Pipe(Fingerprintable):
         writer_batch_size: int = 1000,
         set_new_fingerprint: bool = False,
         keep_in_memory: bool = False,
-        cache_fingerprint: Optional[PathLike] = None,
         fingerprint_kwargs_exclude: Optional[List[str]] = None,
         **kwargs,
     ) -> Dataset:
@@ -217,17 +216,11 @@ class Pipe(Fingerprintable):
         if fingerprint_kwargs_exclude is None:
             fingerprint_kwargs_exclude = []
 
-        for key in ["batched", "with_indices"]:
+        for key in ["batched", "with_indices", "idx"]:
             if key in kwargs.keys():
-                raise ValueError(f"{key} cannot be set, it is always set as True.")
-
-        if cache_fingerprint is not None:
-            self._check_cached_fingerprint(
-                cache_fingerprint,
-                dataset,
-                kwargs=kwargs,
-                fingerprint_kwargs_exclude=fingerprint_kwargs_exclude,
-            )
+                raise ValueError(
+                    f"{key} cannot be set, it is set automatically by the Pipe."
+                )
 
         if set_new_fingerprint:
             new_fingerprint_dict = {
@@ -321,81 +314,3 @@ class Pipe(Fingerprintable):
         batch: Batch, idx: int, filter_op: Optional[Callable] = None
     ) -> Dict[str, Any]:
         return get_batch_eg(batch=batch, idx=idx, filter_op=filter_op)
-
-    def _check_cached_fingerprint(
-        self,
-        cache_dir: PathLike,
-        dataset: Dataset,
-        kwargs: Optional[Dict] = None,
-        fingerprint_kwargs_exclude: Optional[List[str]] = None,
-        debug: bool = True,
-    ):
-        """
-        This method checks if the cached fingerprint is the same as the current one and save
-        the current one. The cached fingerprint is based on the `Pipe.fingerprint()`,
-        `Dataset._fingerprint` and `get_fingerprint(kwargs)`, kwargs matching
-        `fingerprint_kwargs_exclude` are exlucded.
-
-        TODO: remove this.
-        """
-
-        if cache_dir is None:
-            logger.warning(
-                "cache_dir is not provided, previous fingerprints cannot be verified."
-            )
-            return
-
-        # kwargs exceptions
-        if kwargs is not None:
-            kwargs = copy(kwargs)
-            if fingerprint_kwargs_exclude is not None:
-                for key in fingerprint_kwargs_exclude:
-                    kwargs.pop(key, None)
-
-        # get a json-file from the current pipe
-        fingerprints = self.fingerprint(reduce=False)
-        fingerprints["__all__"] = self.fingerprint(reduce=True)
-
-        # define the fingerprint for the kwargs
-        kwargs_fingerprint_dict = {k: get_fingerprint(v) for k, v in kwargs.items()}
-        # kwargs_fingerprint = get_fingerprint(kwargs_fingerprint_dict)
-        fingerprints["__kwargs__"] = kwargs_fingerprint_dict
-
-        # get the dataset fingerprint
-        if isinstance(dataset, Dataset):
-            dset_fingerprint = dataset._fingerprint
-        elif isinstance(dataset, DatasetDict):
-            dset_fingerprint = get_fingerprint(
-                {k: d._fingerprint for k, d in dataset.items()}
-            )
-        else:
-            raise TypeError(f"Cannot handle dataset type {type(dataset)}")
-        fingerprints["__dataset__"] = dset_fingerprint
-
-        # create the directory to store the fingerprints
-        path = Path(cache_dir)
-        if not path.exists():
-            path.mkdir(parents=True)
-
-        # compare to previously saved fingerprints
-        name = self.__class__.__name__
-
-        file = path / f"{name}-{dset_fingerprint}.json"
-        if file.exists():
-            prev_fingerprints = json.loads(file.read_text())
-            diff = jsondiff.diff(prev_fingerprints, fingerprints)
-            if len(diff) > 0:
-                logger.warning(
-                    f"Fingerprint for {name} changed from the latest run. "
-                    f"Caching cannot be used. Enable debug logging mode to see the diff."
-                )
-                logger.debug(f"Fingerprint diff={diff}")
-                if debug:
-                    rich.print(f"[magenta] {name}: Fingerprints are different !")
-                    rich.print(diff)
-            else:
-                logger.info(f"Fingerprint for {name} is identical to the latest run.")
-        else:
-            logger.info(f"No previous fingerprint found for {name}. file={file}")
-
-        file.write_text(json.dumps(fingerprints, indent=2))

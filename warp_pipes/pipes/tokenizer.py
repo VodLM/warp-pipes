@@ -17,19 +17,17 @@ class TokenizerPipe(Pipe):
         self,
         tokenizer: PreTrainedTokenizerFast,
         *,
-        drop_columns: bool = True,
-        fields: Union[str, List[str]] = "text",
+        field: Union[str, List[str]] = "text",
         max_length: Optional[int] = None,
         return_token_type_ids: bool = False,
         return_offsets_mapping: bool = False,
         add_special_tokens: bool = True,
         **kwargs,
     ):
-        self.fields = [fields] if isinstance(fields, str) else fields
+        self.field = field
         assert kwargs.get("input_filter", None) is None, "input_filter is not allowed"
-        super(TokenizerPipe, self).__init__(**kwargs, input_filter=In(self.fields))
+        super(TokenizerPipe, self).__init__(**kwargs, input_filter=In([self.field]))
         self.tokenizer = tokenizer
-        self.drop_columns = drop_columns
         self.args = {
             "max_length": max_length,
             "truncation": max_length is not None,
@@ -41,17 +39,9 @@ class TokenizerPipe(Pipe):
     def _call_batch(
         self, batch: Batch, idx: Optional[List[int]] = None, **kwargs
     ) -> Batch:
-        tokenizer_input = {field: batch[field] for field in self.fields}
 
-        batch_encoding = self.tokenizer(
-            *tokenizer_input.values(), **self.args, **kwargs
-        )
-
-        if self.drop_columns:
-            batch = {k: v for k, v in batch_encoding.items()}
-        else:
-            batch.update({k: v for k, v in batch_encoding.items()})
-
+        batch_encoding = self.tokenizer(batch[self.field], **self.args, **kwargs)
+        batch = {k: v for k, v in batch_encoding.items()}
         return batch
 
     @classmethod

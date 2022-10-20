@@ -4,6 +4,7 @@ import pytest
 import rich
 import pickle
 import dill
+from tests.core.test_pipe import DummyPipe
 from warp_pipes.core.pipe import Pipe
 from warp_pipes.pipes import *
 import inspect
@@ -24,7 +25,7 @@ def test_subclasses_pickle_fingerprint(subclass):
     """Test that all the subclasses of `Pipe` can be pickled,
     unpickled, and have deterministic fingerprint"""
     subclass_instance = subclass.instantiate_test()
-    if subclass_instance is None:
+    if subclass_instance is None or isinstance(subclass_instance, DummyPipe):
         return
 
     # dill inspect
