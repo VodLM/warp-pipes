@@ -24,7 +24,7 @@ class TensorFormat(Enum):
     TORCH = "torch"
 
 
-class TensorHanlder:
+class TensorHandler:
     """A utility class to handle different tensor formats."""
 
     def __init__(self, format: TensorFormat = TensorFormat.NUMPY) -> None:

@@ -23,7 +23,7 @@ from warp_pipes.support.json_struct import flatten_json_struct
 from warp_pipes.support.tensor_handler import tensor_constrains
 from warp_pipes.support.tensor_handler import TensorContrains
 from warp_pipes.support.tensor_handler import TensorFormat
-from warp_pipes.support.tensor_handler import TensorHanlder
+from warp_pipes.support.tensor_handler import TensorHandler
 from warp_pipes.support.tensor_handler import TensorLike
 
 FillValue = TypeVar("FillValue", float, int, np.ndarray)
@@ -166,7 +166,7 @@ class SearchResult:
     ):
         # format inputs and register attributes
         self.format = format
-        formatter = TensorHanlder(format)
+        formatter = TensorHandler(format)
         self.scores = formatter(scores)
         self.indices = formatter(indices)
 
@@ -187,7 +187,7 @@ class SearchResult:
         )
 
     def to(self, format: Optional[TensorFormat] = None) -> "SearchResult":
-        formatter = TensorHanlder(format)
+        formatter = TensorHandler(format)
         self.indices = formatter(self.indices)
         self.scores = formatter(self.scores)
         return self
@@ -260,7 +260,7 @@ class SearchResult:
 
     def fill_masked_indices(self, value_range: Tuple[int, int]) -> "SearchResult":
         """Fill masked indices with random values in the range `value_range`."""
-        new_indices = TensorHanlder(format=TensorFormat.TORCH)(self.indices)
+        new_indices = TensorHandler(format=TensorFormat.TORCH)(self.indices)
         new_indices = torch.where(
             new_indices < 0, torch.randint_like(new_indices, *value_range), new_indices
         )
