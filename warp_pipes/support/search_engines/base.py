@@ -51,21 +51,23 @@ class SearchEngineConfig(BaseModel, Fingerprintable):
     """Base class for search engine configuration."""
 
     _no_fingerprint: List[str] = ["path", "max_batch_size", "verbose"]
-    _no_corpus_fingerprint: List[str] = []
+    _no_index_fingerprint: List[str] = []
     # main arguments
     path: Path
     k: int = 10
     merge_previous_results: bool = False
     require_vectors: bool = False
     k_max: Optional[int] = None
-    # name of the query and corpus fields
-    query_field = "question"
-    output_score_key = "document.proposal_score"
-    output_index_key = "document.row_idx"
-    corpus_document_idx_key = "document.idx"
-    dataset_document_idx_key = "question.document_idx"
+    # query input field and keys
+    query_field = "query"
+    query_input_keys: List[str] = []
+    # index input field and keys
+    index_field = "index"
     index_keys: List[str] = []
-    query_keys: List[str] = []
+    # output keys
+    score_key = "score"
+    index_key = "pid"
+    group_index = "gid"
     # arguments
     max_batch_size: Optional[int] = 100
     verbose: bool = False
@@ -83,7 +85,7 @@ class SearchEngineConfig(BaseModel, Fingerprintable):
     def get_indexing_fingerprint(self, reduce: bool = False) -> str:
         """Fingerprints the arguments used at indexing time."""
         fingerprints = self.get_fingerprint(reduce=False)
-        for exclude in self._no_corpus_fingerprint:
+        for exclude in self._no_index_fingerprint:
             fingerprints.pop(exclude, None)
         if reduce:
             return get_fingerprint(fingerprints)
@@ -262,13 +264,10 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
 
         # get the indices given by the previous engine, if any
         prev_search_results = None
-        if self.config.output_index_key in query:
-            indices = _stack_nested_tensors(query[self.config.output_index_key])
-            scores = _stack_nested_tensors(query[self.config.output_score_key])
-            if (
-                self.config.output_index_key in query
-                and self.config.merge_previous_results
-            ):
+        if self.config.index_key in query:
+            indices = _stack_nested_tensors(query[self.index_key])
+            scores = _stack_nested_tensors(query[self.score_key])
+            if self.index_key in query and self.config.merge_previous_results:
                 prev_search_results = SearchResult(
                     index=indices,
                     score=scores,
@@ -337,8 +336,8 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
         # format the output
         search_results = search_results.to(format=format)
         output = {
-            self.config.output_index_key: search_results.indices,
-            self.config.output_score_key: search_results.scores,
+            self.index_key: search_results.indices,
+            self.score_key: search_results.scores,
         }
 
         pprint_batch(
@@ -367,6 +366,19 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
     @property
     def name(self) -> str:
         return type(self).__name__
+
+    @staticmethod
+    def full_key(field: str, key: str) -> str:
+        """Return the full key for a given field and key."""
+        return f"{field}.{key}"
+
+    @property
+    def index_key(self) -> str:
+        return self.full_key(self.config.index_field, self.config.index_key)
+
+    @property
+    def score_key(self) -> str:
+        return self.full_key(self.config.index_field, self.config.score_key)
 
     @classmethod
     def load_from_path(cls, path: PathLike):
