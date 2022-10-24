@@ -18,7 +18,7 @@ from warp_pipes.support.search_engines.search_result import SearchResult
 from warp_pipes.support.search_engines.vector_base import VectorBase
 from warp_pipes.support.search_engines.vector_base.auto import AutoVectorBase
 from warp_pipes.support.search_engines.vector_base.base import VectorBaseConfig
-from warp_pipes.support.search_engines.vector_base.utils.faiss import TensorLike
+from warp_pipes.support.tensor_handler import TensorLike
 
 
 class DenseSearchEngineConfig(SearchEngineConfig, VectorBaseConfig):
@@ -39,8 +39,6 @@ class DenseSearchEngine(SearchEngine):
         **kwargs,
     ):
         """build the index from the vectors."""
-
-        # input checks and casting
         assert (
             len(vectors.shape) == 2
         ), f"The vectors must be 2D. vectors: {vectors.shape}"

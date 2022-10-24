@@ -19,8 +19,10 @@ from .utils.faiss import get_gpu_resources
 from .utils.faiss import get_sharded_gpu_index
 from .utils.faiss import IdentityVectorTransform
 from .utils.faiss import populate_ivf_index
-from .utils.faiss import TensorLike
 from .utils.faiss import train_preprocessor
+from warp_pipes.support.tensor_handler import TensorFormat
+from warp_pipes.support.tensor_handler import TensorHandler
+from warp_pipes.support.tensor_handler import TensorLike
 
 
 class FaissVectorBase(VectorBase):
@@ -41,8 +43,10 @@ class FaissVectorBase(VectorBase):
         self.index = None  # delete the index, and create a new one in `train`
         self.preprocessor = None
 
-    def train(self, vectors: torch.Tensor, **kwargs):
+    def train(self, vectors: TensorLike, **kwargs):
         gpu_resources = get_gpu_resources(tempmem=self.config.tempmem)
+        handler = TensorHandler(TensorFormat.NUMPY)
+        vectors = handler(vectors)
 
         # build the preprocessor
         self.preprocessor = self._build_preprocessor(vectors)
@@ -55,7 +59,7 @@ class FaissVectorBase(VectorBase):
         # set nprobe
         self.index.nprobe = self.config.nprobe
 
-    def add(self, vectors: torch.Tensor, **kwargs):
+    def add(self, vectors: TensorLike, **kwargs):
         gpu_resources = get_gpu_resources(tempmem=self.config.tempmem)
 
         if self.config.train_on_cpu or len(gpu_resources) == 0:
@@ -103,8 +107,9 @@ class FaissVectorBase(VectorBase):
         return index
 
     def _populate_ivf_index_cpu(self, index, *, vectors):
+        handler = TensorHandler(TensorFormat.NUMPY)
         for i in range(0, len(vectors), self.config.add_batch_size):
-            v = vectors[i : i + self.config.add_batch_size]
+            v = handler(vectors, key=slice(i, i + self.config.add_batch_size))
             v = faiss_sanitize(v, force_numpy=True)
             index.add(v)
         return index

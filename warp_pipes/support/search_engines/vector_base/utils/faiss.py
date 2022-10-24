@@ -21,7 +21,10 @@ import torch
 from loguru import logger
 from tqdm import tqdm
 
-TensorLike = Union[torch.Tensor, np.ndarray]
+from warp_pipes.support.tensor_handler import TensorFormat
+from warp_pipes.support.tensor_handler import TensorHandler
+from warp_pipes.support.tensor_handler import TensorLike
+
 FaissMetric = Union[str, int]
 
 index_factory_pattern = pat = re.compile(
@@ -121,13 +124,15 @@ def rate_limited_imap(f, seq):
 
 def dataset_iterator(x, preproc, bs):
     """ iterate over the lines of x in blocks of size bs"""
+    handler = TensorHandler(TensorFormat.NUMPY)
 
     nb = x.shape[0]
     block_ranges = [(i0, min(nb, i0 + bs)) for i0 in range(0, nb, bs)]
 
     def prepare_block(i01):
         i0, i1 = i01
-        xb = faiss_sanitize(x[i0:i1], force_numpy=True)
+        xb = handler(x, key=slice(i0, i1))
+        xb = faiss_sanitize(xb, force_numpy=True)
         if preproc is not None:
             xb = preproc.apply_py(xb)
         return i0, xb
@@ -319,7 +324,6 @@ def populate_ivf_index(
 ):
     """Add elements to a sharded index. Return the index and if available
     a sharded gpu_index that contains the same data."""
-
     ngpu = len(gpu_resources)
     if max_add_per_gpu is not None and max_add_per_gpu >= 0:
         max_add = max_add_per_gpu * max(1, ngpu)
@@ -356,12 +360,6 @@ def populate_ivf_index(
         if np.isnan(xs).any():
             logger.warning(f"NaN detected in vectors {i0}-{i1}")
             xs[np.isnan(xs)] = 0
-
-        # check range TODO: remove
-        rich.print(
-            f">> {i0}-{i1}: shape={xs.shape}, min={xs.min()}, "
-            f"max={xs.max()}, mean={xs.mean()}, nans={np.isnan(xs).sum()}"
-        )
 
         gpu_index.add_with_ids(xs, np.arange(i0, i1))
         if 0 < max_add < gpu_index.ntotal:

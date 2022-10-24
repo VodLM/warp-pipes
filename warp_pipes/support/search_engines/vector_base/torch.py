@@ -27,8 +27,9 @@ class TorchIndex(nn.Module):
         self.vectors = nn.Parameter(torch.empty(0, dimension), requires_grad=False)
 
     def add(self, vectors: TensorLike, **kwargs):
+        handler = TensorHandler(TensorFormat.TORCH)
         device = self.device_info.device
-        vectors = TensorHandler(TensorFormat.TORCH)(vectors)
+        vectors = handler(vectors)
         self.vectors.data = torch.cat([self.vectors.data, vectors.to(device)], dim=0)
 
     def save(self, path: Path):
@@ -39,7 +40,9 @@ class TorchIndex(nn.Module):
         self.add(vectors)
 
     def forward(self, batch: Batch) -> (torch.Tensor, torch.Tensor):
-        query: torch.Tensor = batch["query"]
+        handler = TensorHandler(TensorFormat.TORCH)
+        query: TensorLike = batch["query"]
+        query = handler(query).to(self.vectors)
         k: int = batch["k"]
         scores = torch.einsum("bh,nh->bn", query, self.vectors)
         k = min(k, len(self.vectors))
