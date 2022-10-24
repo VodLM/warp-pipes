@@ -68,7 +68,7 @@ class SearchEngineConfig(SearchConfig):
     # output keys
     score_key = "score"
     index_key = "pid"
-    group_index = "gid"
+    group_key = "gid"
     # arguments
     max_batch_size: Optional[int] = 100
     verbose: bool = False

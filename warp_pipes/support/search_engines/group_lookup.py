@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import abc
+import math
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -9,40 +9,47 @@ from typing import Optional
 from typing import Tuple
 
 import faiss.contrib.torch_utils  # type: ignore
-import rich
 import torch
 from datasets import Dataset
-from datasets.search import SearchResults
-from fz_openqa.datamodules.index.engines.base import IndexEngine
-from fz_openqa.datamodules.index.engines.vector_base.utils.faiss import TensorLike
-from fz_openqa.datamodules.index.search_result import SearchResult
-from fz_openqa.utils.datastruct import Batch
-from fz_openqa.utils.tensor_arrow import TensorArrowTable
 from loguru import logger
 
+from warp_pipes.support.datastruct import Batch
+from warp_pipes.support.search_engines.base import SearchEngine
+from warp_pipes.support.search_engines.search_result import SearchResult
+from warp_pipes.support.tensor_handler import TensorLike
 
-class DocumentLookupEngine(IndexEngine):
-    """Retrieve all the passages corresponding to a given document id."""
 
-    _no_fingerprint: List[str] = IndexEngine.no_fingerprint + ["_lookup"]
+class GroupLookupEngine(SearchEngine):
+    """Retrieve all the passages corresponding to a given group id."""
+
+    _no_fingerprint: List[str] = SearchEngine._no_fingerprint + ["_lookup"]
+
+    @property
+    def index_group_key(self) -> str:
+        return self.full_key(self.config.index_field, self.config.group_key)
+
+    @property
+    def query_group_key(self) -> str:
+        return self.full_key(self.config.query_field, self.config.group_key)
 
     def _build(
         self,
-        vectors: Optional[TensorLike | TensorArrowTable] = None,
+        vectors: Optional[TensorLike] = None,
         corpus: Optional[Dataset] = None,
+        **kwargs,
     ):
         """build the index from the vectors."""
         if corpus is None:
             raise ValueError("`corpus` is required")
 
-        if self.corpus_document_idx_key not in corpus.column_names:
+        if self.index_group_key not in corpus.column_names:
             raise ValueError(
-                f"`{self.corpus_document_idx_key}` is "
+                f"`{self.index_group_key}` is "
                 f"required to build the"
                 f"{self.__class__.__name__}. "
-                f"Found {corpus.column_names}."
+                f"Found keys `{corpus.column_names}`"
             )
-        doc_ids = corpus[self.corpus_document_idx_key]
+        doc_ids = corpus[self.index_group_key]
 
         # NB: for Colbert, this is a pretty ineffective way to build the index: this is an index
         # from document id to token id, an index from document id to passage id would be better.
@@ -63,19 +70,14 @@ class DocumentLookupEngine(IndexEngine):
     def __len__(self) -> int:
         return self._lookup.shape[1]
 
-    @property
-    def lookup_file(self) -> Path:
-        return self.path / "lookup.pt"
+    def lookup_file(self, savedir: Path) -> Path:
+        return savedir / "lookup.pt"
 
-    def save(self):
-        """save the index to file"""
-        super().save()
-        torch.save(self._lookup, self.lookup_file)
+    def _save_special_attrs(self, savedir: Path):
+        torch.save(self._lookup, self.lookup_file(savedir))
 
-    def load(self):
-        """save the index to file"""
-        super().load()
-        self._lookup = torch.load(self.lookup_file)
+    def _load_special_attrs(self, savedir: Path):
+        self._lookup = torch.load(self.lookup_file(savedir))
 
     def cpu(self):
         """Move the index to CPU."""
@@ -96,21 +98,26 @@ class DocumentLookupEngine(IndexEngine):
     def __del__(self):
         self.free_memory()
 
-    def search(self, *query: Any, k: int = None, **kwargs) -> SearchResult:
+    def search(
+        self, *query: Any, k: int = None, **kwargs
+    ) -> Tuple[TensorLike, TensorLike]:
         doc_ids, *_ = query
         doc_ids = torch.tensor(doc_ids, dtype=torch.int64, device=self._lookup.device)
-        pids = self._lookup[doc_ids][:, :k]
+        pids = self._lookup[doc_ids]
+        pids = pids[:, :k]
         scores = torch.zeros_like(pids, dtype=torch.float32)
-        return SearchResult(score=scores, index=pids, k=k)
+        scores[pids < 0] = -math.inf
+        return scores, pids
 
     def _search_chunk(
         self, query: Batch, *, k: int, vectors: Optional[torch.Tensor], **kwargs
     ) -> SearchResult:
-        if self.dataset_document_idx_key not in query.keys():
+        if self.query_group_key not in query.keys():
             raise ValueError(
-                f"`{self.dataset_document_idx_key}` "
-                f"is required. Found {query.keys()}."
+                f"`{self.query_group_key}` "
+                f"is required. Found keys `{query.keys()}`."
             )
 
-        doc_ids = query[self.dataset_document_idx_key]
-        return self.search(doc_ids, k=k, vectors=vectors, **kwargs)
+        doc_ids = query[self.query_group_key]
+        scores, pids = self.search(doc_ids, k=k, vectors=vectors, **kwargs)
+        return SearchResult(scores=scores, indices=pids)

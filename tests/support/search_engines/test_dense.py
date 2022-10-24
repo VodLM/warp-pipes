@@ -3,7 +3,6 @@ from typing import Dict
 
 import numpy as np
 import pytest
-import rich
 
 from warp_pipes.support.search_engines.dense import DenseSearchEngineConfig, DenseSearchEngine
 
@@ -22,7 +21,6 @@ def test_dense_search_engine(cfg: Dict, tmp_path: Path):
     cfg = DenseSearchEngineConfig(**cfg)
     engine = DenseSearchEngine(config=cfg)
     engine.build(corpus=None, vectors=vectors)
-    rich.print(list(tmp_path.iterdir()))
 
     # process a query vector using the `search` interface
     query_vector = np.random.randn(16, dim)
