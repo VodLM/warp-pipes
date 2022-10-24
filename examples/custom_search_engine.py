@@ -96,7 +96,7 @@ def run(cache_dir):
     path = Path(cache_dir)
     if path.exists():
         shutil.rmtree(path)
-    engine = CustomEngine(path=path, k=3)
+    engine = CustomEngine(config={'path':path, 'k':3})
     engine.build(vectors=vectors, corpus=dataset)
 
     # `search` interface
@@ -114,4 +114,5 @@ def run(cache_dir):
 
 if __name__ == "__main__":
     with tempfile.TemporaryDirectory() as tmpdir:
-        run(Path(tmpdir) / "index")
+        path = str(Path(tmpdir) / "index")
+        run(path)
