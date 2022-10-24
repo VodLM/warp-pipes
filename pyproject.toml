@@ -18,6 +18,8 @@ singledispatchmethod = "^1.0"
 stackprinter = "^0.2.9"
 pytorch-lightning = "^1.7.7"
 tensorstore = "^0.1.27"
+pydantic = "^1.10.2"
+hydra-core = "^1.2.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
