@@ -295,6 +295,14 @@ python-versions = "*"
 tests = ["rich", "littleutils", "pytest", "asttokens"]
 
 [[package]]
+name = "faiss-cpu"
+version = "1.7.2"
+description = "A library for efficient similarity search and clustering of dense vectors."
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
 name = "filelock"
 version = "3.8.0"
 description = "A platform independent file lock."
@@ -1526,7 +1534,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "flake8 
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "93a814dc6dff309dba85bd3d49c4d2eb02b47a0e8e1e91efd3b2a137bc123eab"
+content-hash = "e192d46291535900366cf2e829d97f840db0802147b28e374c351700ba5b2047"
 
 [metadata.files]
 absl-py = []
@@ -1555,6 +1563,7 @@ dill = []
 distlib = []
 entrypoints = []
 executing = []
+faiss-cpu = []
 filelock = []
 frozenlist = []
 fsspec = []
