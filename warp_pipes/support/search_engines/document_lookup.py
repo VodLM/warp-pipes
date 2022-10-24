@@ -24,7 +24,7 @@ from loguru import logger
 class DocumentLookupEngine(IndexEngine):
     """Retrieve all the passages corresponding to a given document id."""
 
-    no_fingerprint: List[str] = IndexEngine.no_fingerprint + ["_lookup"]
+    _no_fingerprint: List[str] = IndexEngine.no_fingerprint + ["_lookup"]
 
     def _build(
         self,

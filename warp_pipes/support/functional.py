@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 from typing import Any
 from typing import Callable
@@ -19,7 +21,9 @@ def always_true(*args, **kwargs):
     return True
 
 
-def get_batch_eg(batch: Batch, idx: int, filter_op: Optional[Callable] = None) -> Dict:
+def get_batch_eg(
+    batch: Batch, idx: int | slice, filter_op: Optional[Callable] = None
+) -> Dict:
     """Extract example `idx` from a batch, potentially filter the keys"""
     filter_op = filter_op or always_true
     return {k: v[idx] for k, v in batch.items() if filter_op(k)}

@@ -103,7 +103,7 @@ class Index(Pipe):
     index_name: Optional[str] = None
     is_indexed: bool = False
     default_key: Optional[str | List[str]] = None
-    no_fingerprint: List[str] = [
+    _no_fingerprint: List[str] = [
         "cache_dir",
         "trainer",
         "loader_kwargs",

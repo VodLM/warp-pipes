@@ -74,7 +74,7 @@ class PredictWithCache(Pipe):
     """ "Processand cache a dataset with a model, retrieve the cached predictions
     when calling the Pipe."""
 
-    no_fingerprint: Optional[List[str]] = ["stores", "caching_kwargs"]
+    _no_fingerprint: Optional[List[str]] = ["stores", "caching_kwargs"]
 
     def __init__(
         self,

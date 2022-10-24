@@ -27,7 +27,7 @@ class MyObject(Fingerprintable):
     """Define a child class of `Fingerprintable`."""
 
     global_class_attribute = "global_attribute"
-    no_fingerprint = Fingerprintable.no_fingerprint + ["unsafe_attribute"]
+    _no_fingerprint = Fingerprintable._no_fingerprint + ["unsafe_attribute"]
 
     def __init__(
         self,

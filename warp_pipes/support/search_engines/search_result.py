@@ -242,6 +242,11 @@ class SearchResult:
     def __len__(self):
         return len(self.indices)
 
+    def __getitem__(self, item):
+        new_indices = self.indices[item]
+        new_scores = self.scores[item]
+        return self.copy(indices=new_indices, scores=new_scores)
+
     @property
     def shape(self) -> Tuple[int, int]:
         return self.indices.shape

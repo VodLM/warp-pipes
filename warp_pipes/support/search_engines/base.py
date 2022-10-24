@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import abc
 import json
-from copy import copy
 from os import PathLike
 from pathlib import Path
 from typing import Any
@@ -13,21 +12,20 @@ from typing import Tuple
 
 import numpy as np
 import omegaconf
+import rich
 import torch
 from datasets import Dataset
 from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig
 from omegaconf import ListConfig
-from pydantic import BaseModel
 
-from warp_pipes.core.fingerprintable import Fingerprintable
 from warp_pipes.core.pipe import Pipe
 from warp_pipes.support.datastruct import Batch
-from warp_pipes.support.fingerprint import get_fingerprint
 from warp_pipes.support.functional import camel_to_snake
 from warp_pipes.support.functional import get_batch_eg
 from warp_pipes.support.pretty import pprint_batch
+from warp_pipes.support.search_engines.search_config import SearchConfig
 from warp_pipes.support.search_engines.search_result import SearchResult
 from warp_pipes.support.shapes import infer_batch_size
 from warp_pipes.support.tensor_handler import TensorFormat
@@ -47,16 +45,19 @@ def _stack_nested_tensors(index):
     return index
 
 
-class SearchEngineConfig(BaseModel, Fingerprintable):
+class SearchEngineConfig(SearchConfig):
     """Base class for search engine configuration."""
 
-    _no_fingerprint: List[str] = ["path", "max_batch_size", "verbose"]
-    _no_index_fingerprint: List[str] = []
+    _no_fingerprint: List[str] = SearchConfig._no_fingerprint + [
+        "path",
+        "max_batch_size",
+        "verbose",
+    ]
+    _no_index_fingerprint: List[str] = SearchConfig._no_index_fingerprint + []
     # main arguments
     path: Path
     k: int = 10
     merge_previous_results: bool = False
-    require_vectors: bool = False
     k_max: Optional[int] = None
     # query input field and keys
     query_field = "query"
@@ -72,33 +73,12 @@ class SearchEngineConfig(BaseModel, Fingerprintable):
     max_batch_size: Optional[int] = 100
     verbose: bool = False
 
-    def get_fingerprint(self, reduce: bool = False) -> str | Dict[str, Any]:
-        """Fingerprints the arguments used at query time."""
-        fingerprints = copy(self.__dict__)
-        for exclude in self._no_fingerprint:
-            fingerprints.pop(exclude, None)
-        if reduce:
-            return get_fingerprint(fingerprints)
-        else:
-            return fingerprints
-
-    def get_indexing_fingerprint(self, reduce: bool = False) -> str:
-        """Fingerprints the arguments used at indexing time."""
-        fingerprints = self.get_fingerprint(reduce=False)
-        for exclude in self._no_index_fingerprint:
-            fingerprints.pop(exclude, None)
-        if reduce:
-            return get_fingerprint(fingerprints)
-        else:
-            return fingerprints
-
 
 class SearchEngine(Pipe, metaclass=abc.ABCMeta):
     """This class implements an index."""
 
-    no_fingerprint: List[str] = []
-    no_index_name: List[str] = []
     _config_type: type = SearchEngineConfig
+    require_vectors: bool = False
 
     def __init__(
         self,
@@ -116,10 +96,10 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
         if isinstance(config, DictConfig):
             config = omegaconf.OmegaConf.to_container(config)
         if isinstance(config, dict):
-            config = SearchEngineConfig(**config)
-        if not isinstance(config, SearchEngineConfig):
+            config = self._config_type(**config)
+        if not isinstance(config, self._config_type):
             raise TypeError(
-                f"Unsupported type: {type(config)} (Expected: {SearchEngineConfig})"
+                f"Unsupported type: {type(config)} (Expected: {self._config_type})"
             )
         return config
 
@@ -156,7 +136,7 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
             self.load()
         else:
             logger.info(f"Creating index at {self.config.path}")
-            if self.config.require_vectors and vectors is None:
+            if self.require_vectors and vectors is None:
                 raise ValueError(
                     f"{self.name} requires vectors, but none were provided"
                 )
@@ -269,14 +249,10 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
             scores = _stack_nested_tensors(query[self.score_key])
             if self.index_key in query and self.config.merge_previous_results:
                 prev_search_results = SearchResult(
-                    index=indices,
-                    score=scores,
+                    indices=indices,
+                    scores=scores,
                     format=format,
                 )
-            if isinstance(indices, np.ndarray):
-                indices = torch.from_numpy(indices)
-            if isinstance(scores, np.ndarray):
-                scores = torch.from_numpy(scores)
 
         # fetch the query vectors as Tensors
         if vectors is None:
@@ -300,8 +276,9 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
             else:
                 q_vectors_i = None
             if prev_search_results is not None:
-                indices_i = prev_search_results.indices[i : i + eff_batch_size]
-                scores_i = prev_search_results.scores[i : i + eff_batch_size]
+                prev_search_results_i = prev_search_results[i : i + eff_batch_size]
+                indices_i = prev_search_results_i.indices
+                scores_i = prev_search_results_i.scores
             else:
                 indices_i = scores_i = None
 
@@ -321,6 +298,7 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
                     r = r.resize(self.config.k_max)
 
             # append the batch of search results to the previous ones
+            assert isinstance(r, SearchResult)
             if search_results is None:
                 search_results = r
             else:
