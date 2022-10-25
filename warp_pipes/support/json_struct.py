@@ -21,7 +21,7 @@ def copy_with_override(data: Dict, key: Any, value: Any) -> Dict:
 def apply_to_json_struct(
     data: Union[List, Dict], fn: Callable, strict=False, **kwargs
 ) -> Union[List, Dict]:
-    """Apply a function to a each leaf of a json-like structure"""
+    """Apply a function to each leaf of a json-like structure"""
     if isinstance(data, (dict, DictConfig)):
         try:
             output = {

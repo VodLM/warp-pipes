@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from enum import Enum
 from functools import singledispatch
-from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -13,7 +12,6 @@ import tensorstore as ts
 import torch
 
 from warp_pipes.support.shapes import infer_shape
-
 
 TensorLike = Union[List, np.ndarray, torch.Tensor, ts.TensorStore]
 TensorKey = Union[int, slice, List[int], np.ndarray]

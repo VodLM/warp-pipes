@@ -67,8 +67,8 @@ class SearchEngineConfig(SearchConfig):
     index_keys: List[str] = []
     # output keys
     score_key = "score"
-    index_key = "pid"
-    group_key = "gid"
+    index_key = "idx"
+    group_key = "group_idx"
     # arguments
     max_batch_size: Optional[int] = 100
     verbose: bool = False
@@ -346,8 +346,10 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
         return type(self).__name__
 
     @staticmethod
-    def full_key(field: str, key: str) -> str:
+    def full_key(field: str, key: Optional[str]) -> Optional[str]:
         """Return the full key for a given field and key."""
+        if key is None:
+            return None
         return f"{field}.{key}"
 
     @property
