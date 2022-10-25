@@ -14,7 +14,6 @@ from typing import TypeVar
 
 import datasets
 import pytorch_lightning as pl
-import rich
 import tensorstore as ts
 from datasets import Dataset
 from datasets import DatasetDict
@@ -33,15 +32,12 @@ from warp_pipes.pipes import Collate
 from warp_pipes.pipes import Flatten
 from warp_pipes.pipes import Pipe
 from warp_pipes.pipes import Predict
-from warp_pipes.pipes.predict import DEFAULT_LOADER_KWARGS
 from warp_pipes.support.datasets_utils import get_dataset_fingerprints
 from warp_pipes.support.datasets_utils import keep_only_columns
 from warp_pipes.support.datastruct import Batch
-from warp_pipes.support.datastruct import OutputFormat
-from warp_pipes.support.datastruct import PathLike
 from warp_pipes.support.fingerprint import get_fingerprint
-from warp_pipes.support.search_engines import AutoEngine
-from warp_pipes.support.search_engines import IndexEngine
+from warp_pipes.support.search_engines import AutoSearchEngine
+from warp_pipes.support.search_engines import SearchEngine
 from warp_pipes.support.shapes import infer_batch_shape
 
 HfDataset = TypeVar("HfDataset", Dataset, DatasetDict)
@@ -113,13 +109,13 @@ class Index(Pipe):
         self,
         corpus: Dataset,
         *,
-        engines: List[IndexEngine | Dict] = None,
+        engines: List[SearchEngine | Dict] = None,
         query_field: str = "question",
         index_field: str = "document",
         model: pl.LightningModule | nn.Module = None,
         trainer: Optional[Trainer] = None,
         persist_cache: bool = False,
-        cache_dir: PathLike = None,
+        cache_dir: os.PathLike = None,
         # Pipe args
         input_filter: Optional[Condition] = None,
         update: bool = False,
@@ -161,8 +157,8 @@ class Index(Pipe):
         self.engines = []
         for engine in engines:
             if isinstance(engine, dict):
-                engine = AutoEngine(**engine, path=self.cache_dir, set_unique_path=True)
-            elif isinstance(engine, IndexEngine):
+                engine = AutoSearchEngine(**engine)
+            elif isinstance(engine, SearchEngine):
                 pass
             else:
                 raise TypeError(f"Unknown engine type {type(engine)}")
@@ -197,7 +193,7 @@ class Index(Pipe):
         )
         # trainer and dataloader
         self.trainer = trainer
-        self.loader_kwargs = loader_kwargs or DEFAULT_LOADER_KWARGS
+        self.loader_kwargs = loader_kwargs
         # collate pipe use to convert dataset rows into a batch
         self.corpus_collate_pipe = corpus_collate_pipe or Collate()
         self.dataset_collate_pipe = dataset_collate_pipe or Collate()
@@ -237,7 +233,7 @@ class Index(Pipe):
 
         if self.requires_vector:
             batch_ = self.dataset_collate_pipe(batch)
-            vectors = self.predict_queries(batch_)[self.predict_queries.output_key]
+            vectors = self.predict_queries(batch_)[self.predict_queries.model_output_key]
         else:
             vectors = None
 

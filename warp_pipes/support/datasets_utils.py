@@ -1,4 +1,6 @@
-from typing import List
+from __future__ import annotations
+
+from typing import List, Dict
 from typing import Optional
 from typing import Union
 
@@ -43,3 +45,18 @@ def keep_only_columns(dataset: HfDataset, columns: Optional[List[str]]) -> HfDat
                     for k, v in dataset.items()
                 }
             )
+
+
+def get_dataset_fingerprints(dataset: HfDataset, reduce: bool = False) -> Dict[str, str] | str:
+    """Fingerprint a `HfDataset`"""
+    if isinstance(dataset, Dataset):
+        fingerprint_state = dataset._fingerprint
+    elif isinstance(dataset, DatasetDict):
+        fingerprint_state = {k: v._fingerprint for k, v in dataset.items()}
+    else:
+        raise ValueError("Unsupported dataset type")
+
+    if reduce and not isinstance(fingerprint_state, str):
+        fingerprint_state = get_fingerprint(fingerprint_state)
+
+    return fingerprint_state
