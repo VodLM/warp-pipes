@@ -19,7 +19,7 @@ from warp_pipes.support.search_engines.search_result import SearchResult
 from warp_pipes.support.tensor_handler import TensorLike
 
 
-class GroupLookupEngine(SearchEngine):
+class GroupLookupSearchEngine(SearchEngine):
     """Retrieve all the passages corresponding to a given group id."""
 
     _no_fingerprint: List[str] = SearchEngine._no_fingerprint + ["_lookup"]

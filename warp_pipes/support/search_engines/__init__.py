@@ -1,9 +1,7 @@
+from .auto import AutoSearchEngine
+from .base import SearchEngine
+from .dense import DenseSearchEngine
+from .elasticsearch import ElasticSearchEngine
+from .group_lookup import GroupLookupSearchEngine
 from .search_result import SearchResult
-
-# from .auto import AutoEngine
-# from .base import IndexEngine
-# from .es import ElasticSearchEngine
-# from .faiss import FaissEngine
-# from .token_faiss import TokenFaissEngine
-# from .topk import TopKEngine
-# from .document_lookup import DocumentLookupEngine
+from .topk import TopkSearchEngine

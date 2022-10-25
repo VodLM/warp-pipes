@@ -226,7 +226,7 @@ class ElasticSearchEngine(SearchEngine):
         indices = list(map(pad_fn_indices, indices))
 
         # build the results
-        return SearchResult(scores=scores, indices=indices, format=TensorFormat.NUMPY)
+        return SearchResult(scores=scores, indices=indices)
 
     @staticmethod
     def _get_value(batch: Dict, column: List | str):
