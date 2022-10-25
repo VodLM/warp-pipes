@@ -276,6 +276,36 @@ optional = false
 python-versions = "*"
 
 [[package]]
+name = "elastic-transport"
+version = "8.4.0"
+description = "Transport classes and utilities shared among Python Elastic client libraries"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+certifi = "*"
+urllib3 = ">=1.26.2,<2"
+
+[package.extras]
+develop = ["pytest", "pytest-cov", "pytest-mock", "pytest-asyncio", "pytest-httpserver", "trustme", "mock", "requests", "aiohttp"]
+
+[[package]]
+name = "elasticsearch"
+version = "8.4.3"
+description = "Python client for Elasticsearch"
+category = "main"
+optional = false
+python-versions = ">=3.6, <4"
+
+[package.dependencies]
+elastic-transport = ">=8,<9"
+
+[package.extras]
+async = ["aiohttp (>=3,<4)"]
+requests = ["requests (>=2.4.0,<3.0.0)"]
+
+[[package]]
 name = "entrypoints"
 version = "0.4"
 description = "Discover and load entry points from installed packages."
@@ -1534,7 +1564,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "flake8 
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "e192d46291535900366cf2e829d97f840db0802147b28e374c351700ba5b2047"
+content-hash = "844a0f64eb5e9edca040752894d3972e0c424081aa12b302251a44367b2c7b1f"
 
 [metadata.files]
 absl-py = []
@@ -1561,6 +1591,8 @@ debugpy = []
 decorator = []
 dill = []
 distlib = []
+elastic-transport = []
+elasticsearch = []
 entrypoints = []
 executing = []
 faiss-cpu = []

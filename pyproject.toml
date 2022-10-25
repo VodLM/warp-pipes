@@ -21,6 +21,7 @@ tensorstore = "^0.1.27"
 pydantic = "^1.10.2"
 hydra-core = "^1.2.0"
 faiss-cpu = "^1.7.2"
+elasticsearch = "^8.4.3"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"

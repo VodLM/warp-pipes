@@ -17,7 +17,7 @@ dataset = datasets.Dataset.from_dict({"document.gid": groups})
 @pytest.mark.parametrize("cfg", [
     {'index_field': 'document', 'group_key': 'gid', 'query_field': 'query'},
 ])
-def test_dense_search_engine(cfg: Dict, tmp_path: Path):
+def test_group_lookup_search_engine(cfg: Dict, tmp_path: Path):
     tmp_path = tmp_path / "test-index"
     cfg['path'] = tmp_path
     engine = GroupLookupEngine(config=cfg)
@@ -34,6 +34,6 @@ def test_dense_search_engine(cfg: Dict, tmp_path: Path):
                 assert idx_ij == -1
             if idx_ij == -1:
                 assert s_ij == -math.inf
-
             if idx_ij != -1:
                 assert groups[idx_ij] == group_idx
+                assert s_ij == 0
