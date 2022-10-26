@@ -12,7 +12,7 @@ except Exception:
     from singledispatchmethod import singledispatchmethod
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 from typing import Callable
 from typing import Dict
 from typing import List
@@ -199,6 +199,7 @@ class Pipe(Fingerprintable):
         set_new_fingerprint: bool = False,
         keep_in_memory: bool = False,
         fingerprint_kwargs_exclude: Optional[List[str]] = None,
+        remove_columns: Optional[Union[str, List[str]]] = None,
         **kwargs,
     ) -> Dataset:
         """Process a `datasets.Dataset` using the Pipe.
@@ -263,6 +264,7 @@ class Pipe(Fingerprintable):
             new_fingerprint=new_fingerprint,
             keep_in_memory=keep_in_memory,
             fn_kwargs=kwargs,
+            remove_columns=remove_columns,
         )
 
     @property
