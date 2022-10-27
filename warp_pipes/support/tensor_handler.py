@@ -114,6 +114,11 @@ def slice_tensor(x: TensorLike, key: TensorKey) -> TensorLike:
 
 @slice_tensor.register(ts.TensorStore)
 def _(x: ts.TensorStore, key: TensorKey) -> ts.TensorStore:
+    if isinstance(key, slice):
+        stop = key.stop
+        if stop > x.shape[0]:
+            stop = x.shape[0]
+        key = slice(key.start, stop, key.step)
     return x[key].read().result()
 
 

@@ -81,7 +81,7 @@ def collate_fn(egs, input_key="data", **kwargs):
         (
             PredictWithCache,
             {
-                "caching_kwargs": {
+                "cache_config": {
                     "model_output_key": base_cfg["output_key"],
                     "collate_fn": collate_fn,
                     "loader_kwargs": {"batch_size": 10, "num_workers": 0},
@@ -93,7 +93,7 @@ def collate_fn(egs, input_key="data", **kwargs):
             Predict,
             {
                 "requires_cache": False,
-                "caching_kwargs": {
+                "cache_config": {
                     "model_output_key": base_cfg["output_key"],
                     "collate_fn": collate_fn,
                     "loader_kwargs": {"batch_size": 10, "num_workers": 0},
@@ -105,7 +105,7 @@ def collate_fn(egs, input_key="data", **kwargs):
             Predict,
             {
                 "requires_cache": True,
-                "caching_kwargs": {
+                "cache_config": {
                     "model_output_key": base_cfg["output_key"],
                     "collate_fn": collate_fn,
                     "loader_kwargs": {"batch_size": 10, "num_workers": 0},
@@ -123,7 +123,7 @@ def test_predict_pipes(cfg, model_info):
     with tempfile.TemporaryDirectory() as cache_dir:
 
         if Cls in {PredictWithCache, Predict}:
-            kwargs["caching_kwargs"]["cache_dir"] = cache_dir
+            kwargs["cache_config"]["cache_dir"] = cache_dir
 
         predict_pipe = Cls(model, **kwargs)
 

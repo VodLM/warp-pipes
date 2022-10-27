@@ -257,4 +257,4 @@ class ElasticSearchEngine(SearchEngine):
 
     def __setstate__(self, state):
         self.__dict__ = state
-        state["_instance"] = Elasticsearch(timeout=state["config"]["timeout"])
+        state["_instance"] = Elasticsearch(timeout=state["config"].timeout)

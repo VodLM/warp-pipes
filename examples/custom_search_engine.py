@@ -74,7 +74,7 @@ def run(cache_dir):
     path = Path(cache_dir)
     if path.exists():
         shutil.rmtree(path)
-    engine = CustomEngine(config={'path': path, 'k': 3})
+    engine = CustomEngine(path=path, config={'k': 3})
     engine.build(vectors=vectors, corpus=dataset)
 
     # `search` interface

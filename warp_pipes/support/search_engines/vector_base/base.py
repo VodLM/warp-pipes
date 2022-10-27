@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import abc
 from os import PathLike
-from pathlib import Path
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -37,8 +36,13 @@ class VectorBaseConfig(BaseModel, Fingerprintable):
 
     @pydantic.validator("faiss_metric")
     def infer_faiss_metric(cls, v):
+        metric_lookup = {
+            "inner_product": faiss.METRIC_INNER_PRODUCT,
+            "l2": faiss.METRIC_L2,
+        }
+        metric_lookup.update({str(v): v for v in metric_lookup.values()})
         if isinstance(v, str):
-            v = {"inner_product": faiss.METRIC_INNER_PRODUCT, "l2": faiss.METRIC_L2}[v]
+            v = metric_lookup[v]
         if not isinstance(v, int):
             raise TypeError(f"faiss_metric must be an int, not {type(v)}")
         return v

@@ -62,15 +62,14 @@ class DenseSearchEngine(SearchEngine):
 
         train_vectors = vectors[train_ids]
         logger.info(
-            f"Train the index "
-            f"with {len(train_vectors)} vectors "
+            f"Train the index with vectors of shape {train_vectors.shape} "
             f"(type: {type(train_vectors)})."
         )
         self._index.train(train_vectors)
 
         # add vectors to the index
         logger.info(
-            f"Adding {len(vectors)} vectors "
+            f"Adding {vectors.shape[0]} vectors "
             f"(type: {type(vectors).__name__}, {vectors.shape}) to the index."
         )
         self._index.add(vectors)
@@ -82,15 +81,13 @@ class DenseSearchEngine(SearchEngine):
         return self._index.ntotal
 
     def _init_index(self, config: VectorBaseConfig) -> VectorBase:
-        import rich
-
-        rich.print(config)
         return AutoVectorBase(config)
 
     def _save_special_attrs(self, savedir: Path):
         self._index.save(savedir)
 
     def _load_special_attrs(self, savedir: Path):
+        self._index = self._init_index(self.config)
         self._index.load(savedir)
 
     def cpu(self):

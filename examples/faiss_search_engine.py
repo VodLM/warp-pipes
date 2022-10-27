@@ -27,7 +27,8 @@ def run(cache_dir):
     dataset = datasets.Dataset.from_dict({"text": data})
 
     engine = DenseSearchEngine(
-        config={'path': path, 'k': 3, "index_factory": "IVF1,Flat", "shard": False})
+        path=path,
+        config={'k': 3, "index_factory": "IVF1,Flat", "shard": False})
     engine.build(vectors=vectors, corpus=dataset)
 
     # `search` interface

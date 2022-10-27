@@ -49,15 +49,13 @@ class SearchEngineConfig(SearchConfig):
     """Base class for search engine configuration."""
 
     _no_fingerprint: List[str] = SearchConfig._no_fingerprint + [
-        "path",
         "max_batch_size",
         "verbose",
     ]
     _no_index_fingerprint: List[str] = SearchConfig._no_index_fingerprint + []
     # main arguments
-    path: Path
     k: int = 10
-    merge_previous_results: bool = False
+    merge_previous_results: bool = True
     k_max: Optional[int] = None
     # query input field and keys
     query_field = "query"
@@ -79,17 +77,23 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
 
     _config_type: type = SearchEngineConfig
     require_vectors: bool = False
+    _no_fingerprint = Pipe._no_fingerprint + ["path"]
 
     def __init__(
         self,
-        config: SearchEngineConfig | Dict | DictConfig,
+        path: PathLike,
+        config: SearchEngineConfig | Dict | DictConfig | None,
         *,
         # Pipe args
         input_filter: None = None,
         update: bool = False,
     ):
         super().__init__(input_filter=input_filter, update=update)
-        self.config = self._parse_config(config)
+        self.path: Path = Path(path)
+        if config is None:
+            self.config = self._load_config()
+        else:
+            self.config = self._parse_config(config)
 
     def _parse_config(self, config: Dict | DictConfig) -> SearchEngineConfig:
         """Parse the configuration."""
@@ -98,6 +102,7 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
         if isinstance(config, dict):
             config = self._config_type(**config)
         if not isinstance(config, self._config_type):
+            rich.print(f"### config: { config }")
             raise TypeError(
                 f"Unsupported type: {type(config)} (Expected: {self._config_type})"
             )
@@ -107,21 +112,32 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
         with open(str(self.state_file), "w") as f:
             f.write(json.dumps(self._get_state()))
-        self._save_special_attrs(self.config.path)
+        self._save_special_attrs(self.path)
 
     def load(self):
+        self._load_config()
+        self._load_special_attrs(self.path)
+
+    def _load_config(self) -> SearchEngineConfig:
+        rich.print(f">> loading config from {self.path}")
         with open(str(self.state_file), "r") as f:
             state = json.load(f)
-            self.config = self._parse_config(state.pop("config"))
-        self._load_special_attrs(self.config.path)
+            config = state["config"]
+            if isinstance(config, str):
+                config = json.loads(config)
+
+        rich.print(f">> loaded {config}")
+
+        return self._parse_config(config)
 
     @property
     def state_file(self) -> Path:
-        return Path(self.config.path) / "state.json"
+        return Path(self.path) / "state.json"
 
     def _get_state(self) -> Dict[str, Any]:
         state = {}
         state["config"] = self.config.json()
+        state["path"] = str(self.path)
         state["_target_"] = type(self).__module__ + "." + type(self).__qualname__
         return state
 
@@ -132,10 +148,10 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
         corpus: Optional[Dataset] = None,
     ):
         if self.exists():
-            logger.info(f"Loading index from {self.config.path}")
+            logger.info(f"Loading index from {self.path}")
             self.load()
         else:
-            logger.info(f"Creating index at {self.config.path}")
+            logger.info(f"Creating index at {self.path}")
             if self.require_vectors and vectors is None:
                 raise ValueError(
                     f"{self.name} requires vectors, but none were provided"
@@ -147,15 +163,15 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
 
     def rm(self):
         """Remove the index."""
-        if self.config.path.exists():
-            if self.config.path.is_dir():
-                self.config.path.rmdir()
+        if self.path.exists():
+            if self.path.is_dir():
+                self.path.rmdir()
             else:
-                self.config.path.unlink()
+                self.path.unlink()
 
     def exists(self):
         """Check if the index exists."""
-        return self.config.path.exists()
+        return self.path.exists()
 
     def __len__(self) -> int:
         """Return the number of vectors in the index."""
@@ -238,6 +254,7 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
 
         # Auto-load the engine if it is not already done.
         if not self.is_up:
+            rich.print(f">> LOADING {type(self).__name__} : {self.config}<<")
             self.load()
             self.cuda()
             assert self.is_up, f"Index {type(self).__name__} is not up."

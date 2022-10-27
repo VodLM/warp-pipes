@@ -106,9 +106,9 @@ class FaissVectorBase(VectorBase):
         index.train(vectors)
         return index
 
-    def _populate_ivf_index_cpu(self, index, *, vectors):
+    def _populate_ivf_index_cpu(self, index, *, vectors: TensorLike):
         handler = TensorHandler(TensorFormat.NUMPY)
-        for i in range(0, len(vectors), self.config.add_batch_size):
+        for i in range(0, vectors.shape[0], self.config.add_batch_size):
             v = handler(vectors, key=slice(i, i + self.config.add_batch_size))
             v = faiss_sanitize(v, force_numpy=True)
             index.add(v)

@@ -1,3 +1,4 @@
+from os import PathLike
 from typing import Any
 from typing import Dict
 
@@ -18,9 +19,10 @@ Engines = {
 def AutoSearchEngine(
     *,
     name: str,
+    path: PathLike,
     config: Dict[str, Any] = None,
     **kwargs,
 ) -> SearchEngine:
     # get the constructor
     EngineCls = Engines[name]
-    return EngineCls(config=config, **kwargs)
+    return EngineCls(path=path, config=config, **kwargs)

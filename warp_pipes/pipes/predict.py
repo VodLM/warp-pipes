@@ -1,20 +1,13 @@
 from __future__ import annotations
 
-import asyncio
 import os
-import random
-import tempfile
-import time
 from copy import copy
-from os import PathLike
-from pathlib import Path
-from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import List
 from typing import Optional
 
-import rich
+from warp_pipes.support.pretty import pprint_batch
 
 try:
     from functools import singledispatchmethod
@@ -28,7 +21,6 @@ from datasets import Dataset
 from datasets import DatasetDict
 from pytorch_lightning.utilities import move_data_to_device
 from torch import nn
-
 
 from warp_pipes.core.pipe import Pipe
 from warp_pipes.pipes.basics import Identity
@@ -62,6 +54,7 @@ class PredictWithoutCache(Pipe):
             device = next(iter(self.model.parameters())).device
             batch = move_data_to_device(batch, device)
 
+        pprint_batch(batch, "PredictWithoutCache._call_batch: batch")
         model_output = self.model(batch, **kwargs)
         return model_output
 
@@ -71,30 +64,33 @@ class PredictWithoutCache(Pipe):
 
 
 class PredictWithCache(Pipe):
-    """ "Processand cache a dataset with a model, retrieve the cached predictions
+    """ "Process and cache a dataset with a model, retrieve the cached predictions
     when calling the Pipe."""
 
-    _no_fingerprint: Optional[List[str]] = ["stores", "caching_kwargs"]
+    _no_fingerprint: Optional[List[str]] = ["stores", "cache_config"]
 
     def __init__(
         self,
         model: pl.LightningModule | nn.Module | Callable,
-        caching_kwargs: Dict[str, Any] = None,
+        cache_config: Dict | caching.CacheConfig,
         **kwargs,
     ):
         super(PredictWithCache, self).__init__(**kwargs)
         self.model = model
         self.stores: Dict[str, ts.TensorStore] = {}
+        if not isinstance(cache_config, caching.CacheConfig):
+            cache_config = caching.CacheConfig(**cache_config)
 
         # get the argument for caching the dataset
-        if caching_kwargs is None:
-            caching_kwargs = {}
-        if "model_output_key" not in caching_kwargs:
+        try:
+            model_output_key = cache_config.model_output_key
+        except KeyError:
             raise ValueError(
-                "`model_output_key` must be provided in `caching_kwargs` to cache the predictions."
+                "`model_output_key` must be provided in `cache_config` "
+                "to cache the predictions."
             )
-        self.caching_kwargs = caching_kwargs
-        self.model_output_key = caching_kwargs["model_output_key"]
+        self.cache_config = cache_config
+        self.model_output_key = model_output_key
 
     def _call_batch(
         self,
@@ -153,42 +149,51 @@ class PredictWithCache(Pipe):
         self,
         dataset: Dataset,
         *,
-        caching_kwargs: Dict[str, Any] = None,
-    ) -> str:
+        cache_config: Dict | caching.CacheConfig = None,
+        return_store: bool = False,
+    ) -> ts.TensorStore | str:
         """
         Cache the predictions of the model on the dataset.
 
         Args:
             dataset (:obj:`Dataset`): The dataset to cache.
-            caching_kwargs (:obj:`Dict[str, Any]`, `optional`): The arguments to pass to
-                the caching function.
+            cache_config (:obj:`caching.CacheConfig`, `optional`): The arguments to configuration to
+            pass to the caching function.
 
         Returns:
             :obj:`str`: fingerprint of the cache.
 
         """
-        # define the arguments for caching the dataset
-        if caching_kwargs is None:
-            caching_kwargs = {}
-        if "model_output_key" in caching_kwargs:
-            if caching_kwargs["model_output_key"] != self.model_output_key:
-                raise ValueError(
-                    f"Cannot change the `model_output_key`. Received: "
-                    f"{caching_kwargs['model_output_key']}, "
-                    f"registered: {self.model_output_key}"
-                )
-        _caching_kwargs = copy(self.caching_kwargs)
-        _caching_kwargs.update(caching_kwargs)
-
         # define a unique fingerprint for the cache file
         cache_fingerprint = self.get_cache_fingerprint(dataset)
 
+        # update self.cache_config with the given cache_config
+        cache_config_ = self.cache_config.copy(update=cache_config)
+        assert cache_config_.model_output_key == self.model_output_key
+
         # cache the dataset
-        store = caching.cache_or_load_vectors(dataset, self.model, **_caching_kwargs)
+        store = caching.cache_or_load_vectors(dataset, self.model, config=cache_config_)
         # store the tensorstore
         self.stores[cache_fingerprint] = store
 
-        return cache_fingerprint
+        if return_store:
+            return store
+        else:
+            return cache_fingerprint
+
+    def get_cached_vectors(self, dataset: Dataset, **kwargs) -> ts.TensorStore:
+        """Get the vectors from a dataset."""
+        cache_fingerprint = self.get_cache_fingerprint(dataset)
+        if cache_fingerprint not in self.stores:
+            raise ValueError(
+                f"cache_fingerprint {cache_fingerprint} is not in the cache. "
+                f"Known fingerprints: {list(self.stores.keys())}"
+            )
+
+        store = self.stores[cache_fingerprint]
+        if isinstance(store, os.PathLike):
+            store = caching.load_store(path=store, read=True)
+        return store
 
     @cache.register(DatasetDict)
     def _(self, dataset: DatasetDict, **kwargs) -> Dict[str, ts.TensorStore]:
@@ -205,18 +210,6 @@ class PredictWithCache(Pipe):
             }
         )
         return fingerprint
-
-    @staticmethod
-    def _setup_caching_kwargs(caching_kwargs: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Adapt the default cacheing kwargs"""
-        if caching_kwargs is None:
-            caching_kwargs = {}
-        if "cache_dir" not in caching_kwargs and "target_path" not in caching_kwargs:
-            logger.warning(
-                "No cache_dir or target_path specified, using a temporary directory."
-            )
-            caching_kwargs["cache_dir"] = tempfile.mkdtemp()
-        return caching_kwargs
 
     def __getstate__(self):
         state = copy(super().__getstate__())
