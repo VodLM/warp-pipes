@@ -1,3 +1,3 @@
 # Warp Pipes
 
-![Pipes banner](assets/header.png)
+Easy data preprocessing re-useable and fingerprintable data transformations.
