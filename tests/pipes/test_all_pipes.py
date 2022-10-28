@@ -1,13 +1,11 @@
-import importlib
-import inspect
-import pytest
-import rich
 import pickle
+from pathlib import Path
+
 import dill
+import pytest
+
 from tests.core.test_pipe import DummyPipe
-from warp_pipes.core.pipe import Pipe
 from warp_pipes.pipes import *
-import inspect
 
 all_subclasses = set(Pipe.__subclasses__())
 n_distinct = len(all_subclasses)
@@ -19,6 +17,7 @@ while True:
         break
     else:
         n_distinct = len(all_subclasses)
+
 
 @pytest.mark.parametrize("subclass", all_subclasses)
 def test_subclasses_pickle_fingerprint(subclass, tmpdir):
@@ -37,5 +36,6 @@ def test_subclasses_pickle_fingerprint(subclass, tmpdir):
     subclass_instance_copy = pickle.loads(buffer)
 
     # fingerprint
-    if subclass.instantiate_test(cache_dir=Path(tmpdir)).fingerprint != subclass_instance_copy.fingerprint:
+    if subclass.instantiate_test(
+            cache_dir=Path(tmpdir)).fingerprint != subclass_instance_copy.fingerprint:
         raise ValueError(f"{subclass} fingerprint is not deterministic.")
