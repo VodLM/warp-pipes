@@ -109,9 +109,7 @@ class GroupLookupSearchEngine(SearchEngine):
         scores[pids < 0] = -math.inf
         return scores, pids
 
-    def _search_chunk(
-        self, query: Batch, *, k: int, vectors: Optional[torch.Tensor], **kwargs
-    ) -> SearchResult:
+    def _search_chunk(self, query: Batch, *, k: int, **kwargs) -> SearchResult:
         if self.query_group_key not in query.keys():
             raise ValueError(
                 f"`{self.query_group_key}` "
@@ -119,5 +117,5 @@ class GroupLookupSearchEngine(SearchEngine):
             )
 
         doc_ids = query[self.query_group_key]
-        scores, pids = self.search(doc_ids, k=k, vectors=vectors, **kwargs)
+        scores, pids = self.search(doc_ids, k=k, **kwargs)
         return SearchResult(scores=scores, indices=pids)

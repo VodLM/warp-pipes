@@ -21,10 +21,10 @@ while True:
         n_distinct = len(all_subclasses)
 
 @pytest.mark.parametrize("subclass", all_subclasses)
-def test_subclasses_pickle_fingerprint(subclass):
+def test_subclasses_pickle_fingerprint(subclass, tmpdir):
     """Test that all the subclasses of `Pipe` can be pickled,
     unpickled, and have deterministic fingerprint"""
-    subclass_instance = subclass.instantiate_test()
+    subclass_instance = subclass.instantiate_test(cache_dir=Path(tmpdir))
     if subclass_instance is None or isinstance(subclass_instance, DummyPipe):
         return
 
@@ -37,5 +37,5 @@ def test_subclasses_pickle_fingerprint(subclass):
     subclass_instance_copy = pickle.loads(buffer)
 
     # fingerprint
-    if subclass.instantiate_test().fingerprint != subclass_instance_copy.fingerprint:
+    if subclass.instantiate_test(cache_dir=Path(tmpdir)).fingerprint != subclass_instance_copy.fingerprint:
         raise ValueError(f"{subclass} fingerprint is not deterministic.")

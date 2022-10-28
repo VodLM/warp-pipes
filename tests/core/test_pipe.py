@@ -33,7 +33,7 @@ class DummyPipe(Pipe):
         return {DummyPipe.output_key: data}
 
     @classmethod
-    def instantiate_test(cls):
+    def instantiate_test(cls, **kwargs):
         """Instantiate a test pipe."""
         return cls()
 

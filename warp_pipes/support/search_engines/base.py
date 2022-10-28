@@ -12,7 +12,6 @@ from typing import Tuple
 
 import numpy as np
 import omegaconf
-import rich
 import torch
 from datasets import Dataset
 from hydra.utils import instantiate
@@ -102,7 +101,6 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
         if isinstance(config, dict):
             config = self._config_type(**config)
         if not isinstance(config, self._config_type):
-            rich.print(f"### config: { config }")
             raise TypeError(
                 f"Unsupported type: {type(config)} (Expected: {self._config_type})"
             )
@@ -119,14 +117,11 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
         self._load_special_attrs(self.path)
 
     def _load_config(self) -> SearchEngineConfig:
-        rich.print(f">> loading config from {self.path}")
         with open(str(self.state_file), "r") as f:
             state = json.load(f)
             config = state["config"]
             if isinstance(config, str):
                 config = json.loads(config)
-
-        rich.print(f">> loaded {config}")
 
         return self._parse_config(config)
 
@@ -226,7 +221,14 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def _search_chunk(
-        self, query: Batch, *, k: int, vectors: Optional[torch.Tensor], **kwargs
+        self,
+        query: Batch,
+        *,
+        k: int,
+        vectors: TensorLike,
+        scores: TensorLike,
+        indices: TensorLike,
+        **kwargs,
     ) -> SearchResult:
         ...
 
@@ -244,8 +246,6 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
 
         Filter the incoming batch using the same pipe as the one
         used to build the index.
-
-        # TODO: keep `vectors` in the batch
         """
         k = k or self.config.k
         pprint_batch(
@@ -254,22 +254,20 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
 
         # Auto-load the engine if it is not already done.
         if not self.is_up:
-            rich.print(f">> LOADING {type(self).__name__} : {self.config}<<")
             self.load()
             self.cuda()
             assert self.is_up, f"Index {type(self).__name__} is not up."
 
         # get the indices given by the previous engine, if any
         prev_search_results = None
-        if self.config.index_key in query:
+        if self.index_key in query:
             indices = _stack_nested_tensors(query[self.index_key])
             scores = _stack_nested_tensors(query[self.score_key])
-            if self.index_key in query and self.config.merge_previous_results:
-                prev_search_results = SearchResult(
-                    indices=indices,
-                    scores=scores,
-                    format=format,
-                )
+            prev_search_results = SearchResult(
+                indices=indices,
+                scores=scores,
+                format=format,
+            )
 
         # fetch the query vectors as Tensors
         if vectors is None:
@@ -322,10 +320,7 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
                 search_results = search_results.append(r)
 
         # merge with the previous results
-        if (
-            prev_search_results is not None
-            and self.config.merge_previous_results is False
-        ):
+        if prev_search_results is not None and self.config.merge_previous_results:
             search_results = search_results + prev_search_results
 
         # format the output
@@ -386,3 +381,7 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
             instance.load()
 
         return instance
+
+    @classmethod
+    def instantiate_test(cls, cache_dir: Path, **kwargs) -> "SearchEngine":
+        return None

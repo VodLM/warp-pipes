@@ -43,7 +43,7 @@ def test_cache_or_load_vectors(cfg):
     data = np.random.randn(100, 8).astype(np.float32)
     dataset = datasets.Dataset.from_dict({cfg["input_key"]: [d for d in data]})
     model = DummyModel(
-        data.shape[1], input_key=cfg["input_key"], output_key=cfg["output_key"]
+        data.shape[1], input_keys=cfg["input_key"], output_key=cfg["output_key"]
     )
 
     # make predictions
@@ -64,8 +64,6 @@ def test_cache_or_load_vectors(cfg):
                     "num_workers": cfg["num_workers"],
                     "pin_memory": False,
                 },
-                cache_dir=cache_dir,
-                target_file=None,
                 driver=cfg["driver"],
                 dtype=cfg["dtype"],
             )
@@ -73,6 +71,7 @@ def test_cache_or_load_vectors(cfg):
         store = cache_or_load_vectors(
             dataset,
             model,
+            cache_dir=cache_dir,
             # trainer: Optional[Trainer] = None,
             config=cache_config
         )

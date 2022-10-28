@@ -75,13 +75,11 @@ class TopkSearchEngine(SearchEngine):
         *,
         k: int,
         vectors: Optional[torch.Tensor],
-        scores: Optional[torch.Tensor] = None,
-        pids: Optional[TensorLike] = None,
+        scores: Optional[torch.Tensor],
+        indices: Optional[TensorLike],
         **kwargs,
     ) -> SearchResult:
-        scores, indices = self.search(scores, pids, k=k)
-
-        # here, fill_missing_values=True so -1 indices are filled with random indices
+        scores, indices = self.search(scores, indices, k=k)
         return SearchResult(
             scores=scores,
             indices=indices,

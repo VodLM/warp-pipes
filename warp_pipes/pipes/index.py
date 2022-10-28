@@ -98,16 +98,42 @@ class Index(Pipe):
             else:
                 self.engines.append(engine)
 
-        if len(self.engines) == 0:
-            raise ValueError(f"No engines were registered for {type(self).__name__}")
+        # validate the engines
+        self._validate_engines(self.engines)
 
         # Register the model and the pipes used
         # to handle the processing of the data
-        self.predict_index = Predict(model, cache_config=index_cache_config)
-        self.predict_queries = Predict(model, cache_config=query_cache_config)
+        self.predict_index = Predict(
+            model, cache_dir=cache_dir, cache_config=index_cache_config
+        )
+        self.predict_queries = Predict(
+            model, cache_dir=cache_dir, cache_config=query_cache_config
+        )
 
         # build the engines and save them to disk
         self.build_engines(corpus)
+
+    def _validate_engines(self, engines: List[SearchEngine]):
+        if len(engines) == 0:
+            raise ValueError("No engines were registered, engine list is empty.")
+
+        # check that all query fields are identical
+        all_query_fields = [e.config.query_field for e in engines]
+        if len(set(all_query_fields)) != 1:
+            raise ValueError(
+                f"`query_field` do not match, "
+                f"found {len(set(all_query_fields))} values: "
+                f"{all_query_fields}"
+            )
+
+        # check that all index fields are identical
+        all_index_fields = [e.config.index_field for e in engines]
+        if len(set(all_index_fields)) != 1:
+            raise ValueError(
+                f"`index_field` do not match, "
+                f"found {len(set(all_index_fields))} values: "
+                f"{all_index_fields}"
+            )
 
     def build_engines(self, corpus: Dataset):
         if self.requires_vector:
@@ -154,7 +180,6 @@ class Index(Pipe):
         cache_config: Dict = None,
         **kwargs,
     ) -> HfDataset:
-        # infer the nesting level. I.e. Questions as shape [bs, ...] or [bs, n_options, ...]
         # cache the query vectors
         if self.requires_vector:
             vectors = self.predict_queries.cache(
@@ -185,7 +210,6 @@ class Index(Pipe):
                 dataset = engine(
                     dataset,
                     vectors=vectors if engine.require_vectors else None,
-                    # fingerprint_state=fingerprint_state,
                     desc=f"{type(engine).__name__}",
                     **kwargs,
                 )
@@ -199,6 +223,11 @@ class Index(Pipe):
 
     def __repr__(self):
         return f"{type(self).__name__}(engines={self.engines_config})"
+
+    @classmethod
+    def instantiate_test(cls, cache_dir: Path, **kwargs) -> "SearchEngine":
+        # TODO: test this
+        return None
 
 
 def infer_nesting_level(dataset: HfDataset, keys: List[str], n: int = 10) -> int:

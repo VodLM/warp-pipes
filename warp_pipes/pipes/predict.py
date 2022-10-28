@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import os
 from copy import copy
+from pathlib import Path
 from typing import Callable
 from typing import Dict
 from typing import List
 from typing import Optional
-
-from warp_pipes.support.pretty import pprint_batch
 
 try:
     from functools import singledispatchmethod
@@ -54,7 +53,6 @@ class PredictWithoutCache(Pipe):
             device = next(iter(self.model.parameters())).device
             batch = move_data_to_device(batch, device)
 
-        pprint_batch(batch, "PredictWithoutCache._call_batch: batch")
         model_output = self.model(batch, **kwargs)
         return model_output
 
@@ -72,11 +70,14 @@ class PredictWithCache(Pipe):
     def __init__(
         self,
         model: pl.LightningModule | nn.Module | Callable,
+        *,
+        cache_dir: Path,
         cache_config: Dict | caching.CacheConfig,
         **kwargs,
     ):
         super(PredictWithCache, self).__init__(**kwargs)
         self.model = model
+        self.cache_dir = cache_dir
         self.stores: Dict[str, ts.TensorStore] = {}
         if not isinstance(cache_config, caching.CacheConfig):
             cache_config = caching.CacheConfig(**cache_config)
@@ -172,7 +173,12 @@ class PredictWithCache(Pipe):
         assert cache_config_.model_output_key == self.model_output_key
 
         # cache the dataset
-        store = caching.cache_or_load_vectors(dataset, self.model, config=cache_config_)
+        store = caching.cache_or_load_vectors(
+            dataset,
+            self.model,
+            cache_dir=self.cache_dir,
+            config=cache_config_,
+        )
         # store the tensorstore
         self.stores[cache_fingerprint] = store
 
@@ -239,8 +245,7 @@ class PredictWithCache(Pipe):
     def instantiate_test(cls, **kwargs) -> "Pipe":
         return cls(
             Identity(),
-            caching_kwargs={
-                "cache_dir": str(),
+            cache_config={
                 "model_output_key": str(),
             },
             **kwargs,

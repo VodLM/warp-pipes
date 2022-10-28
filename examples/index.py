@@ -67,7 +67,7 @@ def run(cache_dir):
     pipe = Index(
         dataset,
         engines=engines,
-        model=DummyModel(input_key="input_ids", output_key="vector"),
+        model=DummyModel(input_keys="input_ids", output_key="vector"),
         index_cache_config=CacheConfig(
             cache_dir=cache_dir,
             model_output_key="vector",
@@ -92,8 +92,6 @@ def run(cache_dir):
     rich.print(output)
 
     rich.print(f"=== pipe.__call__(DATASET) ===")
-    qbatch = {"query.text": ["shs", "kkj"],
-              "query.input_ids": torch.from_numpy(qvectors)}
     qdataset = datasets.DatasetDict({
         "train": datasets.Dataset.from_dict({"query.text": data[:2],
                                              "query.input_ids": torch.from_numpy(

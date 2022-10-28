@@ -117,3 +117,9 @@ class DenseSearchEngine(SearchEngine):
     ) -> SearchResult:
         scores, indices = self.search(vectors, k=k)
         return SearchResult(scores=scores, indices=indices)
+
+    @classmethod
+    def instantiate_test(cls, cache_dir: Path, **kwargs) -> "SearchEngine":
+        return cls(
+            path=cache_dir / "engine", config={"index_factory": "IVF100"}, **kwargs
+        )

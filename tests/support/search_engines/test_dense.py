@@ -19,7 +19,7 @@ def test_dense_search_engine(cfg: Dict, tmp_path: Path):
     tmp_path = tmp_path / "test-index"
     cfg['path'] = tmp_path
     cfg = DenseSearchEngineConfig(**cfg)
-    engine = DenseSearchEngine(config=cfg)
+    engine = DenseSearchEngine(path=tmp_path, config=cfg)
     engine.build(corpus=None, vectors=vectors)
 
     # process a query vector using the `search` interface

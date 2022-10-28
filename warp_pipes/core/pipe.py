@@ -302,7 +302,7 @@ class Pipe(Fingerprintable):
             f.write(stackprinter.format())
 
     @classmethod
-    def instantiate_test(cls, **kwargs) -> Optional["Pipe"]:
+    def instantiate_test(cls, *, cache_dir: Path, **kwargs) -> Optional["Pipe"]:
         """Instantiate a simple `Pipe` object for testing purposes."""
         raise NotImplementedError(
             f"`.instantiate_test()` is not implemented for `{cls.__name__}` "

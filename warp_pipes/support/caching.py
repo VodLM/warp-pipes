@@ -78,10 +78,11 @@ class CacheConfig(pydantic.BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
+    cache_dir: Optional[Path] = None
     trainer_: Optional[Trainer] = pydantic.Field(alias="trainer")
     collate_fn_: Optional[Union[Pipe, Callable]] = pydantic.Field(alias="collate_fn")
     loader_kwargs_: Optional[Dict] = pydantic.Field(alias="loader_kwargs")
-    model_output_key: str
+    model_output_key: Optional[str]
     cache_dir: Path
     driver: Literal["zarr", "n5"] = "zarr"
     dtype: Literal["float16", "float32"] = "float32"
@@ -112,6 +113,7 @@ def cache_or_load_vectors(
     dataset: Dataset,
     model: Callable | nn.Module | LightningModule,
     *,
+    cache_dir=Path,
     config: Dict | CacheConfig,
 ) -> ts.TensorStore:
     """Process a `Dataset` using a model and cache the results into a `TensorStore`. If the cache
@@ -151,8 +153,8 @@ def cache_or_load_vectors(
     )
 
     # setup the cache file
-    assert config.cache_dir is not None, "cache_dir must be provided"
-    target_file = Path(config.cache_dir) / "cached-vectors" / f"{fingerprint}.ts"
+    assert cache_dir is not None, "cache_dir must be provided"
+    target_file = Path(cache_dir) / "cached-vectors" / f"{fingerprint}.ts"
 
     # make tensorstore config and init the store
     ts_config = make_ts_config(
