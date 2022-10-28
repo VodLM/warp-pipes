@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import re
 from typing import Any
 from typing import Callable
 from typing import Dict
+from typing import Iterable
 from typing import Optional
 from typing import T
 
@@ -9,6 +12,8 @@ import numpy as np
 import torch
 
 from warp_pipes.support.datastruct import Batch
+from warp_pipes.support.datastruct import Eg
+from warp_pipes.support.shapes import infer_batch_size
 
 
 def indentity(x: T, **kwargs) -> T:
@@ -19,10 +24,18 @@ def always_true(*args, **kwargs):
     return True
 
 
-def get_batch_eg(batch: Batch, idx: int, filter_op: Optional[Callable] = None) -> Dict:
+def get_batch_eg(
+    batch: Batch, idx: int | slice, filter_op: Optional[Callable] = None
+) -> Dict:
     """Extract example `idx` from a batch, potentially filter the keys"""
     filter_op = filter_op or always_true
     return {k: v[idx] for k, v in batch.items() if filter_op(k)}
+
+
+def iter_batch_egs(batch: Batch) -> Iterable[Eg]:
+    batch_size = infer_batch_size(batch)
+    for i in range(batch_size):
+        yield get_batch_eg(batch, idx=i)
 
 
 def camel_to_snake(name):

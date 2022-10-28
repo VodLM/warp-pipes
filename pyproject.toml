@@ -17,7 +17,11 @@ jsondiff = "^2.0.0"
 singledispatchmethod = "^1.0"
 stackprinter = "^0.2.9"
 pytorch-lightning = "^1.7.7"
-tensorstore = "^0.1.27"
+tensorstore = {version = "^0.1.27", allow-prereleases = true}
+pydantic = "^1.10.2"
+hydra-core = "^1.2.0"
+faiss-cpu = "1.6.5"
+elasticsearch = "7"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"

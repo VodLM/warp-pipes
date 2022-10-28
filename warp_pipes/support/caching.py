@@ -2,16 +2,20 @@ from __future__ import annotations
 
 import json
 import os
+from copy import copy
 from os import PathLike
 from pathlib import Path
 from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import List
+from typing import Literal
 from typing import Optional
 from typing import Sized
+from typing import Union
 
 import numpy as np
+import pydantic
 import tensorstore as ts
 import torch
 from datasets import Dataset
@@ -70,19 +74,47 @@ def make_ts_config(
     }
 
 
+class CacheConfig(pydantic.BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+
+    cache_dir: Optional[Path] = None
+    trainer_: Optional[Trainer] = pydantic.Field(alias="trainer")
+    collate_fn_: Optional[Union[Pipe, Callable]] = pydantic.Field(alias="collate_fn")
+    loader_kwargs_: Optional[Dict] = pydantic.Field(alias="loader_kwargs")
+    model_output_key: Optional[str]
+    cache_dir: Path
+    driver: Literal["zarr", "n5"] = "zarr"
+    dtype: Literal["float16", "float32"] = "float32"
+
+    @property
+    def trainer(self):
+        return self.trainer_ or Trainer()
+
+    @property
+    def collate_fn(self):
+        return self.collate_fn_ or Collate()
+
+    @property
+    def loader_kwargs(self):
+        return self.loader_kwargs_ or copy(DEFAULT_LOADER_KWARGS)
+
+
+def maybe_wrap_model(model):
+    if not isinstance(model, LightningModule):
+        model = LightningWrapper(model)
+    if not isinstance(model, LightningModule):
+        raise TypeError(f"Model must be a LightningModule, got {type(model)}")
+    return model
+
+
 @torch.inference_mode()
 def cache_or_load_vectors(
     dataset: Dataset,
     model: Callable | nn.Module | LightningModule,
     *,
-    trainer: Optional[Trainer] = None,
-    model_output_key: Optional[str] = None,
-    collate_fn: Optional[Pipe | Callable] = None,
-    loader_kwargs: Optional[Dict] = None,
-    cache_dir: Optional[str] = None,
-    target_file: Optional[PathLike] = None,
-    driver: str = "zarr",
-    dtype: str = "float32",
+    cache_dir=Path,
+    config: Dict | CacheConfig,
 ) -> ts.TensorStore:
     """Process a `Dataset` using a model and cache the results into a `TensorStore`. If the cache
     already exists, it is loaded instead.
@@ -91,54 +123,43 @@ def cache_or_load_vectors(
         dataset (:obj:`Dataset`): Dataset to cache or load vectors.
         model (:obj:`Callable` | :obj:`nn.Module` | :obj:`LightningModule`): Model to use to
             compute the vectors.
-        trainer (:obj:`Trainer`, optional): Trainer to use to compute the vectors.
-        model_output_key (:obj:`str`, optional): List of keys to select from the model output
-        collate_fn (:obj:`Pipe` | :obj:`Callable`, optional): Collate function for the DataLoader.
-        loader_kwargs (:obj:`Dict`, optional): Keyword arguments for the DataLoader.
-        cache_dir (:obj:`str`, optional): Directory to cache the vectors.
-        target_file (:obj:`PathLike`, optional): Path to the target file.
-        driver (:obj:`str`, optional): Driver to use for the TensorStore ("zarr" or "n5").
-        dtype (:obj:`str`, optional): Data type to use for the TensorStore ("float16", "float32").
+       config (:obj:`Dict` | :obj:`CacheConfig`, `optional`): Configuration for the caching
 
     Returns:
         ts.TensorStore: cached dataset vectors
     """
-    # check the setup of the model and trainer
-    if trainer is None:
-        logger.warning("No Trainer was provided, setting up a default one.")
-        trainer = Trainer()
-    if not isinstance(model, LightningModule):
-        model = LightningWrapper(model)
-    msg = f"Model must be a LightningModule, got {type(model)}"
-    assert isinstance(model, LightningModule), msg
+    if not isinstance(config, CacheConfig):
+        config = CacheConfig(**config)
+
+    model = maybe_wrap_model(model)
 
     # infer the vector size from the model output
     dset_shape = _infer_dset_shape(
         dataset,
         model,
-        model_output_key=model_output_key,
-        collate_fn=collate_fn,
+        model_output_key=config.model_output_key,
+        collate_fn=config.collate_fn,
     )
 
     # define a unique fingerprint for the cache file
     fingerprint = get_fingerprint(
         {
             "model": get_fingerprint(model),
-            "model_output_key": model_output_key,
+            "model_output_key": config.model_output_key,
             "dataset": dataset._fingerprint,
-            "driver": driver,
-            "dtype": dtype,
+            "driver": config.driver,
+            "dtype": config.dtype,
         }
     )
 
     # setup the cache file
-    if target_file is None:
-        assert cache_dir is not None, "cache_dir must be provided"
-        target_file = Path(cache_dir) / "cached-vectors" / f"{fingerprint}.ts"
-    target_file = Path(target_file)
+    assert cache_dir is not None, "cache_dir must be provided"
+    target_file = Path(cache_dir) / "cached-vectors" / f"{fingerprint}.ts"
 
     # make tensorstore config and init the store
-    ts_config = make_ts_config(target_file, dset_shape, driver=driver, dtype=dtype)
+    ts_config = make_ts_config(
+        target_file, dset_shape, driver=config.driver, dtype=config.dtype
+    )
     if not target_file.exists():
         logger.info(f"Writing vectors to {target_file.absolute()}")
         store = ts.open(ts_config, create=True, delete_existing=False).result()
@@ -151,15 +172,15 @@ def cache_or_load_vectors(
         # init a callback to store predictions in the TensorStore
         tensorstore_callback = TensorStoreCallback(
             store=store,
-            output_key=model_output_key,
+            output_key=config.model_output_key,
         )
         _process_dataset_with_lightning(
             dataset=dataset,
             model=model,
             tensorstore_callback=tensorstore_callback,
-            trainer=trainer,
-            collate_fn=collate_fn,
-            loader_kwargs=loader_kwargs,
+            trainer=config.trainer,
+            collate_fn=config.collate_fn,
+            loader_kwargs=config.loader_kwargs,
         )
         del store
     else:

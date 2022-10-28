@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+import tempfile
 from functools import partial
-import pytest
 
-import tensorstore as ts
 import datasets
 import numpy as np
+import pytest
 import torch
-import tempfile
-from warp_pipes.support.caching import cache_or_load_vectors
+from pytorch_lightning import Trainer
+
 from tests.utils.dummy_model import DummyModel
+from warp_pipes.support.caching import cache_or_load_vectors, CacheConfig
 
 base_cfg = {
     "driver": "zarr",
@@ -42,7 +43,7 @@ def test_cache_or_load_vectors(cfg):
     data = np.random.randn(100, 8).astype(np.float32)
     dataset = datasets.Dataset.from_dict({cfg["input_key"]: [d for d in data]})
     model = DummyModel(
-        data.shape[1], input_key=cfg["input_key"], output_key=cfg["output_key"]
+        data.shape[1], input_keys=cfg["input_key"], output_key=cfg["output_key"]
     )
 
     # make predictions
@@ -53,23 +54,26 @@ def test_cache_or_load_vectors(cfg):
 
     # cache predictions
     with tempfile.TemporaryDirectory() as cache_dir:
+        cache_config = CacheConfig(
+                model_output_key=cfg["output_key"]
+                if cfg["output_key"] is not None
+                else None,
+                collate_fn=partial(collate_fn, input_key=cfg["input_key"]),
+                loader_kwargs={
+                    "batch_size": 10,
+                    "num_workers": cfg["num_workers"],
+                    "pin_memory": False,
+                },
+                driver=cfg["driver"],
+                dtype=cfg["dtype"],
+            )
+
         store = cache_or_load_vectors(
             dataset,
             model,
-            # trainer: Optional[Trainer] = None,
-            model_output_key=cfg["output_key"]
-            if cfg["output_key"] is not None
-            else None,
-            collate_fn=partial(collate_fn, input_key=cfg["input_key"]),
-            loader_kwargs={
-                "batch_size": 10,
-                "num_workers": cfg["num_workers"],
-                "pin_memory": False,
-            },
             cache_dir=cache_dir,
-            target_file=None,
-            driver=cfg["driver"],
-            dtype=cfg["dtype"],
+            # trainer: Optional[Trainer] = None,
+            config=cache_config
         )
 
         # compare the cached predictions with the original predictions

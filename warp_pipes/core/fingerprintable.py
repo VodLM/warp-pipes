@@ -34,7 +34,7 @@ class Fingerprintable(object):
     `Fingerprintable` implements a few method that helps integration with the rest of the framework,
     such as safe serialization (pickle, multiprocessing) and deterministic caching (datasets).
 
-    TODO: refactor with __getstate__ and __setstate__ (avoid hacing to specify `no_fingerprint`)
+    TODO: refactor with __getstate__ and __setstate__ (avoid hacing to specify `_no_fingerprint`)
 
     Functionalities:
      - Serialization capability can be inspected using `.dill_inspect()`
@@ -44,12 +44,12 @@ class Fingerprintable(object):
      - The object can be printed using `.pprint()`
 
      Class attributes:
-        - `no_fingerprint`: list of attributes that should not be included in the fingerprint.
+        - `_no_fingerprint`: list of attributes that should not be included in the fingerprint.
         - `id`: an identifier for the Fingerprintable (Optional).
     """
 
     __metaclass__ = ABCMeta
-    no_fingerprint: Optional[List[str]] = ["id"]
+    _no_fingerprint: Optional[List[str]] = ["id"]
 
     def __init__(self, *, id: Optional[str] = None, **kwargs):
         """
@@ -66,7 +66,7 @@ class Fingerprintable(object):
         Args:
           reduce: (:obj:`bool`, optional): test the whole object or test all
             leaves separately and return the corresponding JSON structure.
-          exclude_non_fingerprintable: (:obj:`bool`, optional): exclude the `no_fingerprint`
+          exclude_non_fingerprintable: (:obj:`bool`, optional): exclude the `_no_fingerprint`
             attributes is set to True
 
         Returns:
@@ -113,7 +113,7 @@ class Fingerprintable(object):
     @property
     def fingerprint(self) -> str:
         """Return a fingerprint of the object.
-        All attributes stated in `no_fingerprint` are excluded.
+        All attributes stated in `_no_fingerprint` are excluded.
         """
         return self.get_fingerprint(reduce=True)
 
@@ -122,7 +122,7 @@ class Fingerprintable(object):
         reduce=False,
     ) -> str | Dict[str, Any]:
         """Return a fingerprint of the object.
-        All attributes stated in `no_fingerprint` are excluded.
+        All attributes stated in `_no_fingerprint` are excluded.
 
         Args:
           reduce (:obj:`bool`, optional): if `True`, return a string fingerprint of the object,
@@ -141,7 +141,7 @@ class Fingerprintable(object):
 
     def _get_fingerprint_struct(self) -> List | Dict:
         """get the fingerprint for each element in the JSON-like representation
-        of the object, and exclude all parameters stated in `no_fingerprint`
+        of the object, and exclude all parameters stated in `_no_fingerprint`
 
         """
         data = self.to_json_struct(exclude_non_fingerprintable=True)
@@ -180,7 +180,7 @@ class Fingerprintable(object):
           include_only (`List[str]`, optional): include only these attributes in the dictionary
           include_class_attributes (:obj:`bool`, optional): include the class attributes in the dict
           exclude_non_fingerprintable (`bool`, optional): if `True`, extend the exclude
-            list with `no_fingerprint`
+            list with `_no_fingerprint`
           **kwargs:
 
         Returns:
@@ -203,8 +203,8 @@ class Fingerprintable(object):
         if exclude_no_recursive is None:
             exclude_no_recursive = []
 
-        if exclude_non_fingerprintable and self.no_fingerprint is not None:
-            exclude_no_recursive.extend(self.no_fingerprint)
+        if exclude_non_fingerprintable and self._no_fingerprint is not None:
+            exclude_no_recursive.extend(self._no_fingerprint)
 
         exclude = exclude + exclude_no_recursive
 

@@ -25,7 +25,7 @@ dataset = datasets.Dataset.from_dict(batch)
 dataset.save_to_disk("cache/toy_dset.dset")
 dataset = datasets.load_from_disk("cache/toy_dset.dset", keep_in_memory=False)
 model = DummyModel(
-    data.shape[1], input_key=base_cfg["input_key"], output_key=base_cfg["output_key"]
+    data.shape[1], input_keys=base_cfg["input_key"], output_key=base_cfg["output_key"]
 )
 with torch.inference_mode():
     preds = model({base_cfg["input_key"]: torch.from_numpy(data)})
@@ -81,7 +81,7 @@ def collate_fn(egs, input_key="data", **kwargs):
         (
             PredictWithCache,
             {
-                "caching_kwargs": {
+                "cache_config": {
                     "model_output_key": base_cfg["output_key"],
                     "collate_fn": collate_fn,
                     "loader_kwargs": {"batch_size": 10, "num_workers": 0},
@@ -93,7 +93,7 @@ def collate_fn(egs, input_key="data", **kwargs):
             Predict,
             {
                 "requires_cache": False,
-                "caching_kwargs": {
+                "cache_config": {
                     "model_output_key": base_cfg["output_key"],
                     "collate_fn": collate_fn,
                     "loader_kwargs": {"batch_size": 10, "num_workers": 0},
@@ -105,7 +105,7 @@ def collate_fn(egs, input_key="data", **kwargs):
             Predict,
             {
                 "requires_cache": True,
-                "caching_kwargs": {
+                "cache_config": {
                     "model_output_key": base_cfg["output_key"],
                     "collate_fn": collate_fn,
                     "loader_kwargs": {"batch_size": 10, "num_workers": 0},
@@ -123,7 +123,8 @@ def test_predict_pipes(cfg, model_info):
     with tempfile.TemporaryDirectory() as cache_dir:
 
         if Cls in {PredictWithCache, Predict}:
-            kwargs["caching_kwargs"]["cache_dir"] = cache_dir
+            kwargs["cache_dir"] = cache_dir
+            kwargs["cache_config"]
 
         predict_pipe = Cls(model, **kwargs)
 

@@ -22,7 +22,6 @@ batch = {
 
 
 def run():
-
     # build a pipe to tokenize the text and the title
     tokenizer = transformers.AutoTokenizer.from_pretrained(bert_id)
     tokenizer_pipe = Parallel(
