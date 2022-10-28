@@ -16,8 +16,8 @@ from loguru import logger
 from omegaconf import DictConfig
 from torch import nn
 
-from warp_pipes.pipes import Pipe
-from warp_pipes.pipes import Predict
+from warp_pipes.core.pipe import Pipe
+from warp_pipes.pipes import predict
 from warp_pipes.support import caching
 from warp_pipes.support.datastruct import Batch
 from warp_pipes.support.search_engines import AutoSearchEngine
@@ -103,10 +103,10 @@ class Index(Pipe):
 
         # Register the model and the pipes used
         # to handle the processing of the data
-        self.predict_index = Predict(
+        self.predict_index = predict.Predict(
             model, cache_dir=cache_dir, cache_config=index_cache_config
         )
-        self.predict_queries = Predict(
+        self.predict_queries = predict.Predict(
             model, cache_dir=cache_dir, cache_config=query_cache_config
         )
 

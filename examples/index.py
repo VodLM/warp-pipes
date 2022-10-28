@@ -44,7 +44,6 @@ def run(cache_dir):
          "document.input_ids": vectors}
     )
 
-    # TODO: auto
     engines = [{
         "name": "elasticsearch",
         "config": {
