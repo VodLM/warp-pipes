@@ -89,6 +89,8 @@ class GeneratePassages(Pipe):
 
         # setup the arguments for the `generate_passages_for_all_keys` function
         self.verbose = verbose
+        if global_keys is not None:
+            global_keys = [f"{self.key_prefix}{g}" for g in global_keys]
         self.global_keys = global_keys
         self.passage_args = self.get_passage_args(
             size=size,

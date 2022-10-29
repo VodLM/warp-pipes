@@ -1,23 +1,20 @@
 import transformers
-
 from warp_pipes.pipes import (
-    GeneratePassages,
     TokenizerPipe,
-    AddPrefix,
     Sequential,
     Parallel,
-    HasPrefix,
-    RenameKeys,
+    HasPrefix, GeneratePassages, CollateField,
 )
+from warp_pipes.support.functional import get_batch_eg
 from warp_pipes.support.pretty import pprint_batch
 
 bert_id = "bert-base-cased"
 batch = {
-    "document": [
+    "document.text": [
         "Fipple flutes are found in many cultures around the world. Often with six holes, the shepherd's pipe is a common pastoral image. Shepherds often piped both to soothe the sheep and to amuse themselves. Modern manufactured six-hole folk pipes are referred to as pennywhistle or tin whistle. The recorder is a form of pipe, often used as a rudimentary instructional musical instrument at schools, but versatile enough that it is also used in orchestral music."
     ],
-    "title": ["Title: Pipe. "],
-    "idx": [0],
+    "title.text": ["Title: Pipe. "],
+    "document.idx": [0],
 }
 
 
@@ -28,25 +25,23 @@ def run():
         Sequential(
             TokenizerPipe(
                 tokenizer,
+                key="text",
                 field="document",
                 return_offsets_mapping=True,
                 add_special_tokens=False,
                 update=True,
             ),
-            AddPrefix("document."),
-            RenameKeys({"document.document": "document.text"}),
             input_filter=HasPrefix("document"),
         ),
         Sequential(
             TokenizerPipe(
                 tokenizer,
+                key="text",
                 field="title",
                 return_offsets_mapping=True,
                 add_special_tokens=False,
                 update=True,
             ),
-            AddPrefix("title."),
-            RenameKeys({"title.title": "title.text"}),
             input_filter=HasPrefix("title"),
         ),
         update=True,
@@ -57,7 +52,7 @@ def run():
     tokenized_batch = tokenizer_pipe(batch)
     pprint_batch(tokenized_batch, header="Tokenized batch")
 
-    # build a pipe to generate passages
+    # passages
     passages_pipe = GeneratePassages(
         size=30,
         stride=20,
@@ -70,9 +65,12 @@ def run():
     passages = passages_pipe(tokenized_batch, header="Passages")
     pprint_batch(passages)
 
-    # display the output batch
-    for i, p in enumerate(passages["document.input_ids"]):
-        print(f"{i}", tokenizer.decode(p, skip_special_tokens=False), end="\n\n")
+    # collate examples
+    collate_docs = CollateField(field="document", to_tensor=["idx", "input_ids", "attention_mask"])
+    egs = [get_batch_eg(passages, idx=i) for i  in [0, 1, 2, 3]]
+    c_batch = collate_docs(egs,
+                           to_tensor=[])
+    pprint_batch(c_batch, "output batch")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 from .basics import *  # noqa: F403
 from .collate import Collate
+from .collate import CollateField
 from .collate import DeCollate
 from .index import Index
 from .nesting import *  # noqa: F403
@@ -15,3 +16,5 @@ from .predict import Predict
 from .predict import PredictWithCache
 from .predict import PredictWithoutCache
 from .tokenizer import TokenizerPipe
+from warp_pipes.core.condition import *  # noqa: F403
+from warp_pipes.core.pipe import Pipe
