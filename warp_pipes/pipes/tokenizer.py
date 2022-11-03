@@ -17,7 +17,8 @@ class TokenizerPipe(Pipe):
         self,
         tokenizer: PreTrainedTokenizerFast,
         *,
-        field: Union[str, List[str]] = "text",
+        key: Union[str, List[str]] = "text",
+        field: Optional[str] = None,
         max_length: Optional[int] = None,
         return_token_type_ids: bool = False,
         return_offsets_mapping: bool = False,
@@ -25,8 +26,11 @@ class TokenizerPipe(Pipe):
         **kwargs,
     ):
         self.field = field
+        if field is not None:
+            key = f"{field}.{key}"
+        self.key = key
         assert kwargs.get("input_filter", None) is None, "input_filter is not allowed"
-        super(TokenizerPipe, self).__init__(**kwargs, input_filter=In([self.field]))
+        super(TokenizerPipe, self).__init__(**kwargs, input_filter=In([self.key]))
         self.tokenizer = tokenizer
         self.args = {
             "max_length": max_length,
@@ -40,8 +44,10 @@ class TokenizerPipe(Pipe):
         self, batch: Batch, idx: Optional[List[int]] = None, **kwargs
     ) -> Batch:
 
-        batch_encoding = self.tokenizer(batch[self.field], **self.args, **kwargs)
+        batch_encoding = self.tokenizer(batch[self.key], **self.args, **kwargs)
         batch = {k: v for k, v in batch_encoding.items()}
+        if self.field is not None:
+            batch = {f"{self.field}.{k}": v for k, v in batch.items()}
         return batch
 
     @classmethod

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import math
 from functools import partial
 from typing import Callable
 from typing import List
 from typing import Optional
 from typing import T
-from typing import Union
 
 import numpy as np
+from datasets import Dataset
 from torch import Tensor
 
 from warp_pipes.core.pipe import Pipe
@@ -124,12 +125,14 @@ class ApplyAsFlatten(Pipe):
         pipe: Pipe,
         level: int = 1,
         flatten_idx: bool = True,
+        flatten_dataset: bool = False,
         **kwargs,
     ):
         super(ApplyAsFlatten, self).__init__(**kwargs)
         self.pipe = pipe
         self.level = level
         self.flatten_idx = flatten_idx
+        self.flatten_dataset = flatten_dataset
         if level > 0:
             self.flatten = Flatten(level=level)
             self.nest = Nest(shape=None)
@@ -169,6 +172,46 @@ class ApplyAsFlatten(Pipe):
                 f"{repr_batch(batch, header='ApplyAsFlatten output batch')}"
             )
         return output
+
+    def _call_dataset(self, dataset: Dataset, **kwargs) -> Dataset:
+        if not self.flatten_dataset or self.level == 0:
+            return super()._call_dataset(dataset, **kwargs)
+        else:
+            desc = kwargs.pop("desc", type(self).__name__)
+            # infer the original shape of the batch
+            batch_size = kwargs.pop("batch_size", 10)
+            dataset = self.flatten(
+                dataset,
+                **kwargs,
+                batch_size=batch_size,
+                desc=f"{desc}: flatten (level={self.level})",
+            )
+            input_shape = infer_batch_shape(dataset[:batch_size])[
+                : self.flatten.level + 1
+            ]
+            nested_batch_size = math.prod(input_shape)
+            # transform the dataset
+            dataset = self.pipe(
+                dataset,
+                **kwargs,
+                batch_size=nested_batch_size,
+                desc=f"{desc}: {type(self.pipe).__name__}",
+            )
+            # re-nest
+
+            dataset = self.nest(
+                dataset,
+                **kwargs,
+                batch_size=nested_batch_size,
+                desc=f"{desc}: nest (level={self.level})",
+                shape=input_shape,
+            )
+
+            return dataset
+
+        # 1. flatten
+        # 2. apply pipe
+        # 3. re-nest
 
     @classmethod
     def instantiate_test(cls, **kwargs) -> None:
