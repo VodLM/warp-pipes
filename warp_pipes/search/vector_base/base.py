@@ -14,7 +14,7 @@ import torch
 from pydantic import BaseModel
 
 from warp_pipes.core.fingerprintable import Fingerprintable
-from warp_pipes.support.search_engines.vector_base.utils.faiss import FaissFactory
+from warp_pipes.search.vector_base.utils.faiss import FaissFactory
 
 
 class VectorBaseConfig(BaseModel, Fingerprintable):

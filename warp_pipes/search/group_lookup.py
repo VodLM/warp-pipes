@@ -13,16 +13,16 @@ import torch
 from datasets import Dataset
 from loguru import logger
 
+from warp_pipes.search.base import Search
+from warp_pipes.search.search_result import SearchResult
 from warp_pipes.support.datastruct import Batch
-from warp_pipes.support.search_engines.base import SearchEngine
-from warp_pipes.support.search_engines.search_result import SearchResult
 from warp_pipes.support.tensor_handler import TensorLike
 
 
-class GroupLookupSearchEngine(SearchEngine):
+class GroupLookupSearch(Search):
     """Retrieve all the passages corresponding to a given group id."""
 
-    _no_fingerprint: List[str] = SearchEngine._no_fingerprint + ["_lookup"]
+    _no_fingerprint: List[str] = Search._no_fingerprint + ["_lookup"]
 
     @property
     def index_group_key(self) -> str:

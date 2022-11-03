@@ -14,7 +14,7 @@ from warp_pipes.core.pipe import Pipe
 from warp_pipes.support.datastruct import Batch
 from warp_pipes.support.datastruct import Eg
 from warp_pipes.support.nesting import flatten_nested
-from warp_pipes.support.pretty import get_separator
+from warp_pipes.support.pretty import get_console_separator
 from warp_pipes.support.pretty import pprint_batch
 from warp_pipes.support.shapes import infer_shape
 
@@ -118,7 +118,7 @@ class PrintContent(Pipe):
                         raise ValueError("tokenizer is required to decode")
                     x = self.tokenizer.decode(x, skip_special_tokens=False)
                 print(x)
-                rich.print(get_separator("."))
+                rich.print(get_console_separator("."))
         return batch
 
     @classmethod

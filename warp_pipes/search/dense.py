@@ -11,24 +11,24 @@ import torch  # type: ignore
 from datasets import Dataset
 from loguru import logger
 
+from warp_pipes.search.base import Search
+from warp_pipes.search.base import SearchConfig
+from warp_pipes.search.search_result import SearchResult
+from warp_pipes.search.vector_base import VectorBase
+from warp_pipes.search.vector_base.auto import AutoVectorBase
+from warp_pipes.search.vector_base.base import VectorBaseConfig
 from warp_pipes.support.datastruct import Batch
-from warp_pipes.support.search_engines.base import SearchEngine
-from warp_pipes.support.search_engines.base import SearchEngineConfig
-from warp_pipes.support.search_engines.search_result import SearchResult
-from warp_pipes.support.search_engines.vector_base import VectorBase
-from warp_pipes.support.search_engines.vector_base.auto import AutoVectorBase
-from warp_pipes.support.search_engines.vector_base.base import VectorBaseConfig
 from warp_pipes.support.tensor_handler import TensorLike
 
 
-class DenseSearchEngineConfig(SearchEngineConfig, VectorBaseConfig):
+class DenseSearchConfig(SearchConfig, VectorBaseConfig):
     ...
 
 
-class DenseSearchEngine(SearchEngine):
+class DenseSearch(Search):
     """This class implements a low level index."""
 
-    _config_type: type = DenseSearchEngineConfig
+    _config_type: type = DenseSearchConfig
     _max_num_proc: int = 1
     require_vectors: bool = True
 
@@ -119,7 +119,7 @@ class DenseSearchEngine(SearchEngine):
         return SearchResult(scores=scores, indices=indices)
 
     @classmethod
-    def instantiate_test(cls, cache_dir: Path, **kwargs) -> "SearchEngine":
+    def instantiate_test(cls, cache_dir: Path, **kwargs) -> "Search":
         return cls(
             path=cache_dir / "engine", config={"index_factory": "IVF100"}, **kwargs
         )

@@ -10,15 +10,15 @@ import torch  # type: ignore
 from datasets import Dataset
 from loguru import logger
 
+from warp_pipes.search.base import Search
+from warp_pipes.search.search_result import SearchResult
 from warp_pipes.support.datastruct import Batch
-from warp_pipes.support.search_engines.base import SearchEngine
-from warp_pipes.support.search_engines.search_result import SearchResult
 from warp_pipes.support.tensor_handler import TensorFormat
 from warp_pipes.support.tensor_handler import TensorHandler
 from warp_pipes.support.tensor_handler import TensorLike
 
 
-class TopkSearchEngine(SearchEngine):
+class TopkSearch(Search):
     _max_num_proc: int = None
     require_vectors: bool = False
 

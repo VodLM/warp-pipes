@@ -97,7 +97,7 @@ def pretty_decode(
     return txt
 
 
-def get_separator(char="\u2500"):
+def get_console_separator(char="\u2500"):
     console_width, _ = shutil.get_terminal_size()
     return console_width * char
 
@@ -108,7 +108,7 @@ def pprint_batch(
     if silent:
         return
     u, exceptions = _repr_batch(batch, header, report_nans=report_nans, rich=True)
-    u = get_separator() + "\n" + u
+    u = get_console_separator() + "\n" + u
     rich.print(u)
     if len(exceptions):
         rich.print(
@@ -139,7 +139,7 @@ def _repr_batch(
     u = ""
     if header is not None:
         u += f"=== {header} ===\n"
-        u += get_separator("-") + "\n"
+        u += get_console_separator("-") + "\n"
 
     if len(batch.keys()) == 0:
         return u + "Batch (Empty)", {}

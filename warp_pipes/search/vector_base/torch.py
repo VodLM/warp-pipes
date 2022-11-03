@@ -9,9 +9,9 @@ from typing import Optional
 import torch
 from torch import nn
 
+from warp_pipes.search.vector_base.base import VectorBase
+from warp_pipes.search.vector_base.base import VectorBaseConfig
 from warp_pipes.support.datastruct import Batch
-from warp_pipes.support.search_engines.vector_base.base import VectorBase
-from warp_pipes.support.search_engines.vector_base.base import VectorBaseConfig
 from warp_pipes.support.tensor_handler import TensorFormat
 from warp_pipes.support.tensor_handler import TensorHandler
 from warp_pipes.support.tensor_handler import TensorLike

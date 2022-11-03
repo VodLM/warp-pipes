@@ -5,6 +5,7 @@ from .collate import DeCollate
 from .index import Index
 from .nesting import *  # noqa: F403
 from .passages import GeneratePassages
+from .pipelines import BlockSequential
 from .pipelines import Gate
 from .pipelines import Parallel
 from .pipelines import ParallelbyField

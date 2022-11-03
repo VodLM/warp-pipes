@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import TypeVar
 
 import pytorch_lightning as pl
 from datasets import Dataset
@@ -18,13 +17,12 @@ from torch import nn
 
 from warp_pipes.core.pipe import Pipe
 from warp_pipes.pipes import predict
+from warp_pipes.search import AutoSearchEngine
+from warp_pipes.search import Search
 from warp_pipes.support import caching
+from warp_pipes.support.datasets_utils import HfDataset
 from warp_pipes.support.datastruct import Batch
-from warp_pipes.support.search_engines import AutoSearchEngine
-from warp_pipes.support.search_engines import SearchEngine
 from warp_pipes.support.shapes import infer_batch_shape
-
-HfDataset = TypeVar("HfDataset", Dataset, DatasetDict)
 
 MAX_INDEX_CACHE_AGE = 60 * 60 * 24 * 3  # 3 days
 TEMPDIR_SUFFIX = "-tempdir"
@@ -53,7 +51,7 @@ class Index(Pipe):
         corpus: Dataset,
         *,
         cache_dir: os.PathLike = None,
-        engines: List[SearchEngine | Dict] = None,
+        engines: List[Search | Dict] = None,
         model: pl.LightningModule | nn.Module = None,
         index_cache_config: Dict | caching.CacheConfig,
         query_cache_config: Dict | caching.CacheConfig,
@@ -80,7 +78,7 @@ class Index(Pipe):
                 engine = AutoSearchEngine(
                     name=engine["name"], path=engine_path, config=engine["config"]
                 )
-            elif isinstance(engine, SearchEngine):
+            elif isinstance(engine, Search):
                 if engine.path != engine_path:
                     logger.warning(
                         f"Overriding engine path {engine.path} "
@@ -113,7 +111,7 @@ class Index(Pipe):
         # build the engines and save them to disk
         self.build_engines(corpus)
 
-    def _validate_engines(self, engines: List[SearchEngine]):
+    def _validate_engines(self, engines: List[Search]):
         if len(engines) == 0:
             raise ValueError("No engines were registered, engine list is empty.")
 
@@ -225,7 +223,7 @@ class Index(Pipe):
         return f"{type(self).__name__}(engines={self.engines_config})"
 
     @classmethod
-    def instantiate_test(cls, cache_dir: Path, **kwargs) -> "SearchEngine":
+    def instantiate_test(cls, cache_dir: Path, **kwargs) -> "Search":
         # TODO: test this
         return None
 

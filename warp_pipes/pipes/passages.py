@@ -117,6 +117,17 @@ class GeneratePassages(Pipe):
         )
 
         # extract the text field
+        output[f"{self.key_prefix}text"] = self._extract_passages_text(
+            batch, indexes, output
+        )
+
+        # format batch output keys
+        output[f"{self.key_prefix}passage_idx"] = output.pop("passage_idx")
+        output[f"{self.key_prefix}passage_mask"] = output.pop("passage_mask")
+
+        return output
+
+    def _extract_passages_text(self, batch, indexes, output):
         extracted_texts = []
         for idx, ofs_ids in zip(indexes, output[f"{self.key_prefix}offset_mapping"]):
             passage = self.extract_passage_text_from_doc(
@@ -126,10 +137,7 @@ class GeneratePassages(Pipe):
                 passage = batch[f"{self.prepend_key_prefix}text"][idx] + passage
 
             extracted_texts.append(passage)
-
-        output[f"{self.key_prefix}text"] = extracted_texts
-
-        return output
+        return extracted_texts
 
     def _check_input_keys(self, batch):
         for key in self.required_keys:

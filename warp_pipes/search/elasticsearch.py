@@ -15,16 +15,15 @@ from tqdm.auto import tqdm
 
 from warp_pipes.core.condition import In
 from warp_pipes.pipes import RenameKeys
+from warp_pipes.search.base import FingerprintableConfig
+from warp_pipes.search.base import Search
+from warp_pipes.search.search_result import SearchResult
 from warp_pipes.support.datasets_utils import keep_only_columns
 from warp_pipes.support.datastruct import Batch
 from warp_pipes.support.elasticsearch import es_create_index
 from warp_pipes.support.elasticsearch import es_ingest
 from warp_pipes.support.elasticsearch import es_remove_index
 from warp_pipes.support.elasticsearch import es_search
-from warp_pipes.support.search_engines.base import SearchEngine
-from warp_pipes.support.search_engines.base import SearchEngineConfig
-from warp_pipes.support.search_engines.search_result import SearchResult
-from warp_pipes.support.tensor_handler import TensorFormat
 from warp_pipes.support.tensor_handler import TensorLike
 
 
@@ -34,14 +33,14 @@ def _pad_to_length(lst: List, *, length: int, fill_token) -> List:
     return lst[:length]
 
 
-class ElasticSearchEngineConfig(SearchEngineConfig):
-    _no_fingerprint: List[str] = SearchEngineConfig._no_fingerprint + [
+class ElasticSearchConfig(FingerprintableConfig):
+    _no_fingerprint: List[str] = FingerprintableConfig._no_fingerprint + [
         "_instance",
         "timeout",
         "es_logging_level",
         "ingest_batch_size",
     ]
-    _no_index_fingerprint = SearchEngineConfig._no_index_fingerprint + [
+    _no_index_fingerprint = FingerprintableConfig._no_index_fingerprint + [
         "es_temperature",
         "auxiliary_weight" "scale_auxiliary_weight_by_lengths",
     ]
@@ -61,10 +60,10 @@ class ElasticSearchEngineConfig(SearchEngineConfig):
     es_logging_level: str = "error"
 
 
-class ElasticSearchEngine(SearchEngine):
+class ElasticSearch(Search):
     _max_num_proc: int = None
     _instance: Elasticsearch
-    _config_type = ElasticSearchEngineConfig
+    _config_type = ElasticSearchConfig
 
     @property
     def input_keys(self):

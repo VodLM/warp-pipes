@@ -20,12 +20,12 @@ from omegaconf import DictConfig
 from omegaconf import ListConfig
 
 from warp_pipes.core.pipe import Pipe
+from warp_pipes.search.config import FingerprintableConfig
+from warp_pipes.search.search_result import SearchResult
 from warp_pipes.support.datastruct import Batch
 from warp_pipes.support.functional import camel_to_snake
 from warp_pipes.support.functional import get_batch_eg
 from warp_pipes.support.pretty import pprint_batch
-from warp_pipes.support.search_engines.search_config import SearchConfig
-from warp_pipes.support.search_engines.search_result import SearchResult
 from warp_pipes.support.shapes import infer_batch_size
 from warp_pipes.support.tensor_handler import TensorFormat
 from warp_pipes.support.tensor_handler import TensorHandler
@@ -44,14 +44,14 @@ def _stack_nested_tensors(index):
     return index
 
 
-class SearchEngineConfig(SearchConfig):
+class SearchConfig(FingerprintableConfig):
     """Base class for search engine configuration."""
 
-    _no_fingerprint: List[str] = SearchConfig._no_fingerprint + [
+    _no_fingerprint: List[str] = FingerprintableConfig._no_fingerprint + [
         "max_batch_size",
         "verbose",
     ]
-    _no_index_fingerprint: List[str] = SearchConfig._no_index_fingerprint + []
+    _no_index_fingerprint: List[str] = FingerprintableConfig._no_index_fingerprint + []
     # main arguments
     k: int = 10
     merge_previous_results: bool = True
@@ -71,17 +71,17 @@ class SearchEngineConfig(SearchConfig):
     verbose: bool = False
 
 
-class SearchEngine(Pipe, metaclass=abc.ABCMeta):
+class Search(Pipe, metaclass=abc.ABCMeta):
     """This class implements an index."""
 
-    _config_type: type = SearchEngineConfig
+    _config_type: type = SearchConfig
     require_vectors: bool = False
     _no_fingerprint = Pipe._no_fingerprint + ["path"]
 
     def __init__(
         self,
         path: PathLike,
-        config: SearchEngineConfig | Dict | DictConfig | None,
+        config: FingerprintableConfig | Dict | DictConfig | None,
         *,
         # Pipe args
         input_filter: None = None,
@@ -94,7 +94,7 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
         else:
             self.config = self._parse_config(config)
 
-    def _parse_config(self, config: Dict | DictConfig) -> SearchEngineConfig:
+    def _parse_config(self, config: Dict | DictConfig) -> FingerprintableConfig:
         """Parse the configuration."""
         if isinstance(config, DictConfig):
             config = omegaconf.OmegaConf.to_container(config)
@@ -116,7 +116,7 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
         self._load_config()
         self._load_special_attrs(self.path)
 
-    def _load_config(self) -> SearchEngineConfig:
+    def _load_config(self) -> FingerprintableConfig:
         with open(str(self.state_file), "r") as f:
             state = json.load(f)
             config = state["config"]
@@ -383,5 +383,5 @@ class SearchEngine(Pipe, metaclass=abc.ABCMeta):
         return instance
 
     @classmethod
-    def instantiate_test(cls, cache_dir: Path, **kwargs) -> "SearchEngine":
+    def instantiate_test(cls, cache_dir: Path, **kwargs) -> "Search":
         return None

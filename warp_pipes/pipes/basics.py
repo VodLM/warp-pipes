@@ -98,13 +98,24 @@ class DropKeys(Pipe):
     _allows_update = False
     _allows_input_filter = False
 
-    def __init__(self, keys: List[str], **kwargs):
+    def __init__(
+        self,
+        keys: Optional[List[str]] = None,
+        condition: Optional[Condition] = None,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
+        if keys is None and condition is None:
+            raise ValueError("Either keys or condition must be provided")
+        if keys is None:
+            keys = []
         self.keys = keys
+        self.condition = condition
 
     def _call_batch(self, batch: Batch, **kwargs) -> Batch:
-        for key in self.keys:
-            if key in batch:
+        keys = list(batch.keys())
+        for key in keys:
+            if key in self.keys or self.condition(key):
                 batch.pop(key)
         return batch
 
