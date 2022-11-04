@@ -11,8 +11,8 @@ import torch  # type: ignore
 from datasets import Dataset
 from loguru import logger
 
-from warp_pipes.search.base import Search
-from warp_pipes.search.base import SearchConfig
+from warp_pipes.search.search import Search
+from warp_pipes.search.search import SearchConfig
 from warp_pipes.search.search_result import SearchResult
 from warp_pipes.search.vector_base import VectorBase
 from warp_pipes.search.vector_base.auto import AutoVectorBase
@@ -31,6 +31,10 @@ class DenseSearch(Search):
     _config_type: type = DenseSearchConfig
     _max_num_proc: int = 1
     require_vectors: bool = True
+
+    _no_fingerprint: List[str] = SearchConfig._no_fingerprint + [
+        "_index",
+    ]
 
     def _build(
         self,

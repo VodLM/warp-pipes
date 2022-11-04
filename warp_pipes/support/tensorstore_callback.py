@@ -37,6 +37,8 @@ def select_key_from_output(batch: Batch, key: Optional[str] = None) -> torch.Ten
             )
         return batch
 
+    if key not in batch:
+        raise ValueError(f"Key {key} not found in batch. Found {batch.keys()}")
     return batch[key]
 
 

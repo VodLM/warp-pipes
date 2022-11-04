@@ -94,7 +94,7 @@ class Search(Pipe, metaclass=abc.ABCMeta):
         else:
             self.config = self._parse_config(config)
 
-    def _parse_config(self, config: Dict | DictConfig) -> FingerprintableConfig:
+    def _parse_config(self, config: Dict | DictConfig) -> SearchConfig:
         """Parse the configuration."""
         if isinstance(config, DictConfig):
             config = omegaconf.OmegaConf.to_container(config)

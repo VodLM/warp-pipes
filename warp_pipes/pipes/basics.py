@@ -110,6 +110,8 @@ class DropKeys(Pipe):
         if keys is None:
             keys = []
         self.keys = keys
+        if condition is None:
+            condition = Static(False)
         self.condition = condition
 
     def _call_batch(self, batch: Batch, **kwargs) -> Batch:

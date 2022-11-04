@@ -13,7 +13,7 @@ import torch
 from datasets import Dataset
 from loguru import logger
 
-from warp_pipes.search.base import Search
+from warp_pipes.search.search import Search
 from warp_pipes.search.search_result import SearchResult
 from warp_pipes.support.datastruct import Batch
 from warp_pipes.support.tensor_handler import TensorLike

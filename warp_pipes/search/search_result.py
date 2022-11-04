@@ -217,6 +217,7 @@ class SearchResult:
         other = other.to(format=TensorFormat.TORCH)
 
         # take the minimum scores (except for `inf` values) and offset the scores
+        # TODO: potentially remove this, or at least leave it to the use to configure it
         min_scores_self = self._get_real_min(self.scores)
         self.scores = self.scores - min_scores_self[:, None]
         min_scores_other = self._get_real_min(other.scores)
@@ -291,6 +292,8 @@ def sum_scores(
     assert a_indices.shape == a_scores.shape
     b_indices, b_scores = b
     assert b_indices.shape == b_scores.shape
+    b_indices = b_indices.to(a_indices.device)
+    b_scores = b_scores.to(a_scores.device)
 
     # infer the new indices
     all_indices = torch.cat([a_indices, b_indices], dim=1)
@@ -302,13 +305,15 @@ def sum_scores(
 
     # set the new indices
     new_indices = fill_token_value + torch.zeros(
-        (len(all_indices), new_size), dtype=torch.long
+        (len(all_indices), new_size), dtype=all_indices.dtype, device=all_indices.device
     )
     new_indices.scatter_(1, unique_inv, all_indices)
 
     # set the new scores
     all_scores = torch.cat([a_scores, b_scores], dim=1)
-    new_scores = torch.zeros_like(new_indices, dtype=a_scores.dtype)
+    new_scores = torch.zeros(
+        new_indices.shape, dtype=all_scores.dtype, device=all_scores.device
+    )
     new_scores.scatter_add_(1, unique_inv, all_scores)
     new_scores[new_indices == -1] = -math.inf
 

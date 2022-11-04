@@ -30,10 +30,14 @@ def take_subset(
         if isinstance(subset_size, float) and 0 <= subset_size <= 1:
             subset_size = int(subset_size * len(dataset))
 
+        if len(dataset) < subset_size:
+            return dataset
+
         # select subset and return
         rgn = np.random.RandomState(0)
         indices = rgn.choice(len(dataset), subset_size, replace=False)
-        return dataset.select(indices)
+        subset_dataset = dataset.select(indices)
+        return subset_dataset
 
     elif isinstance(dataset, DatasetDict):
         if isinstance(subset_size, (float, int)):

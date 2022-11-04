@@ -19,6 +19,7 @@ from warp_pipes.core.pipe import Pipe
 from warp_pipes.pipes import predict
 from warp_pipes.search import AutoSearchEngine
 from warp_pipes.search import Search
+from warp_pipes.search.auto import AutoSearchConfig
 from warp_pipes.support import caching
 from warp_pipes.support.datasets_utils import HfDataset
 from warp_pipes.support.datastruct import Batch
@@ -37,8 +38,6 @@ def _get_unique(x: List):
 class Index(Pipe):
     """Keep an index of a Dataset and search it using queries."""
 
-    index_name: Optional[str] = None
-    is_indexed: bool = False
     default_key: Optional[str | List[str]] = None
     _no_fingerprint: List[str] = [
         "cache_dir",
@@ -73,10 +72,23 @@ class Index(Pipe):
         self.engines_config = copy(engines)
         self.engines = []
         for engine in engines:
-            engine_path = cache_dir / engine["name"]
+            if isinstance(engine, dict):
+                engine_config = AutoSearchConfig(
+                    name=engine["name"], config=engine["config"]
+                )
+            elif isinstance(engine, Search):
+                engine_config = engine.config
+            else:
+                raise ValueError(
+                    f"Unknown engine type: {type(engine)} (accepted: dict, Search)"
+                )
+
+            # set the engine path
+            engine_path = cache_dir / f"search-{engine_config.fingerprint}"
+
             if isinstance(engine, dict):
                 engine = AutoSearchEngine(
-                    name=engine["name"], path=engine_path, config=engine["config"]
+                    name=engine["name"], path=engine_path, config=engine_config
                 )
             elif isinstance(engine, Search):
                 if engine.path != engine_path:
@@ -189,6 +201,8 @@ class Index(Pipe):
             vectors = None if isinstance(dataset, Dataset) else {}
 
         # process the dataset with the Engines
+        kwargs["set_new_fingerprint"] = True
+        kwargs["print_fringerprint_dict"] = False
         for engine in self.engines:
             if isinstance(dataset, DatasetDict):
                 dataset = DatasetDict(

@@ -15,7 +15,9 @@ class FingerprintableConfig(pydantic.BaseModel, Fingerprintable):
     """Base class for search engine configuration."""
 
     _no_fingerprint: List[str] = Fingerprintable._no_fingerprint + [
-        "no_index_fingerprint"
+        "no_index_fingerprint",
+        "__private_attribute_values__",
+        "__fields_set__",
     ]
     _no_index_fingerprint: List[str] = []
 

@@ -10,7 +10,7 @@ import torch  # type: ignore
 from datasets import Dataset
 from loguru import logger
 
-from warp_pipes.search.base import Search
+from warp_pipes.search.search import Search
 from warp_pipes.search.search_result import SearchResult
 from warp_pipes.support.datastruct import Batch
 from warp_pipes.support.tensor_handler import TensorFormat
@@ -32,7 +32,7 @@ class TopkSearch(Search):
         if self.config.merge_previous_results:
             logger.warning(
                 "merge_previous_results is set to True, "
-                "but MaxSimEngine is a re-ranker: setting "
+                "but TopkSearch is a re-ranker: setting "
                 "merge_previous_results to False"
             )
             self.config.merge_previous_results = False

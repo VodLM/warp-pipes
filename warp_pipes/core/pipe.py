@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import json
 import os
 from abc import ABCMeta
 from abc import abstractmethod
-from copy import copy
+
+import dill
 
 try:
     from functools import singledispatchmethod
@@ -18,13 +18,9 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import T
-from os import PathLike
 
-import re
 import stackprinter
 import datasets
-import jsondiff
-import rich
 from datasets import Dataset
 from datasets import DatasetDict
 from transformers import BatchEncoding
@@ -197,6 +193,7 @@ class Pipe(Fingerprintable):
         batch_size: int = 100,
         writer_batch_size: int = 1000,
         set_new_fingerprint: bool = False,
+        print_fringerprint_dict: bool = False,
         keep_in_memory: bool = False,
         fingerprint_kwargs_exclude: Optional[List[str]] = None,
         remove_columns: Optional[Union[str, List[str]]] = None,
@@ -224,12 +221,13 @@ class Pipe(Fingerprintable):
                 )
 
         if set_new_fingerprint:
+            kwargs_ = {**kwargs, "remove_columns": remove_columns}
             new_fingerprint_dict = {
                 "dataset": dataset._fingerprint,
-                "pipe": self.fingerprint(reduce=True),
+                "pipe": self.fingerprint,
                 "params": {
                     k: get_fingerprint(v)
-                    for k, v in kwargs.items()
+                    for k, v in kwargs_.items()
                     if k not in fingerprint_kwargs_exclude
                 },
             }
@@ -237,6 +235,10 @@ class Pipe(Fingerprintable):
             logger.info(
                 f"{type(self).__name__}: Setting `new_fingerprint` to {new_fingerprint}"
             )
+            if print_fringerprint_dict:
+                import rich
+
+                rich.print(new_fingerprint_dict)
         else:
             new_fingerprint = None
 
@@ -251,6 +253,19 @@ class Pipe(Fingerprintable):
 
         if desc is None:
             desc = self.__class__.__name__
+
+        # check pickle
+        if num_proc > 1:
+            if not dill.pickles(self):
+                raise ValueError(
+                    f"{type(self).__name__}: Pipe must be pickleable to "
+                    f"use multiprocessing: {self.dill_inspect(reduce=False)}"
+                )
+            if not dill.pickles(kwargs):
+                dill_fingerprints = {k: dill.pickles(v) for k, v in kwargs.items()}
+                raise ValueError(
+                    f"kwargs must be pickleable to use multiprocessing: {dill_fingerprints}"
+                )
 
         # process the dataset using `Dataset.map`
         return dataset.map(

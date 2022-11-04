@@ -44,7 +44,7 @@ class TokenizerPipe(Pipe):
         self, batch: Batch, idx: Optional[List[int]] = None, **kwargs
     ) -> Batch:
 
-        batch_encoding = self.tokenizer(batch[self.key], **self.args, **kwargs)
+        batch_encoding = self.tokenizer(batch[self.key], **self.args)
         batch = {k: v for k, v in batch_encoding.items()}
         if self.field is not None:
             batch = {f"{self.field}.{k}": v for k, v in batch.items()}

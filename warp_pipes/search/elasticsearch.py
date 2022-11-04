@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import math
 from functools import partial
@@ -8,6 +9,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+import dill
 from datasets import Dataset
 from elasticsearch import Elasticsearch
 from loguru import logger
@@ -15,8 +17,8 @@ from tqdm.auto import tqdm
 
 from warp_pipes.core.condition import In
 from warp_pipes.pipes import RenameKeys
-from warp_pipes.search.base import FingerprintableConfig
-from warp_pipes.search.base import Search
+from warp_pipes.search.search import Search
+from warp_pipes.search.search import SearchConfig
 from warp_pipes.search.search_result import SearchResult
 from warp_pipes.support.datasets_utils import keep_only_columns
 from warp_pipes.support.datastruct import Batch
@@ -33,21 +35,20 @@ def _pad_to_length(lst: List, *, length: int, fill_token) -> List:
     return lst[:length]
 
 
-class ElasticSearchConfig(FingerprintableConfig):
-    _no_fingerprint: List[str] = FingerprintableConfig._no_fingerprint + [
+class ElasticSearchConfig(SearchConfig):
+    _no_fingerprint: List[str] = SearchConfig._no_fingerprint + [
         "_instance",
         "timeout",
         "es_logging_level",
         "ingest_batch_size",
     ]
-    _no_index_fingerprint = FingerprintableConfig._no_index_fingerprint + [
+    _no_index_fingerprint = SearchConfig._no_index_fingerprint + [
         "es_temperature",
-        "auxiliary_weight" "scale_auxiliary_weight_by_lengths",
+        "auxiliary_weight",
+        "scale_auxiliary_weight_by_lengths",
     ]
 
     es_index_key: str = "__ROW_IDX__"
-    index_name: Optional[str] = None
-    corpus_size: Optional[int] = None
     timeout: Optional[int] = 60
     es_body: Optional[Dict] = None
     main_key: str = "text"
@@ -61,8 +62,8 @@ class ElasticSearchConfig(FingerprintableConfig):
 
 
 class ElasticSearch(Search):
-    _max_num_proc: int = None
-    _instance: Elasticsearch
+    # TODO: fix multiprocessings
+    _max_num_proc: int = 1
     _config_type = ElasticSearchConfig
 
     @property
@@ -93,19 +94,19 @@ class ElasticSearch(Search):
         corpus = keep_only_columns(corpus, self.index_columns)
 
         # set a unique index name
-        self.config.index_name = self._get_index_name(corpus, self.config)
-        self.config.corpus_size = len(corpus)
+        self.index_name = self._get_index_name(corpus, self.config)
+        self.corpus_size = len(corpus)
 
         # instantiate the ElasticSearch instance
         self._init_es_instance()
 
         # init the index
         is_new_index = es_create_index(
-            self.config.index_name, body=self.config.es_body, es_instance=self.instance
+            self.index_name, body=self.config.es_body, es_instance=self.instance
         )
         if not is_new_index:
             logger.info(
-                f"ElasticSearch index with name=`{self.config.index_name}` already exists."
+                f"ElasticSearch index with name=`{self.index_name}` already exists."
             )
 
         # build the index
@@ -122,12 +123,12 @@ class ElasticSearch(Search):
 
                     _ = es_ingest(
                         batch,
-                        index_name=self.config.index_name,
+                        index_name=self.index_name,
                         es_instance=self.instance,
                     )
             except Exception as ex:
                 # clean up the index if something went wrong
-                es_remove_index(self.config.index_name, es_instance=self.instance)
+                es_remove_index(self.index_name, es_instance=self.instance)
                 raise ex
 
     def _init_es_instance(self):
@@ -140,11 +141,24 @@ class ElasticSearch(Search):
         logging.getLogger("elasticsearch").setLevel(log_level)
         self._instance = Elasticsearch(timeout=self.config.timeout)
 
+    @property
+    def special_attrs_file(self):
+        return Path(self.path) / "special_attrs.json"
+
     def _load_special_attrs(self, savedir: Path):
+        with open(self.special_attrs_file, "r") as f:
+            attrs = json.load(f)
+        self.index_name = attrs["index_name"]
+        self.corpus_size = attrs["corpus_size"]
         self._init_es_instance()
 
     def _save_special_attrs(self, savedir: Path):
-        ...
+        attrs = {
+            "index_name": self.index_name,
+            "corpus_size": self.corpus_size,
+        }
+        with open(self.special_attrs_file, "w") as f:
+            f.write(json.dumps(attrs))
 
     @property
     def instance(self):
@@ -152,7 +166,7 @@ class ElasticSearch(Search):
 
     def rm(self):
         """Remove the index."""
-        es_remove_index(self.config.index_name, es_instance=self.instance)
+        es_remove_index(self.index_name, es_instance=self.instance)
 
     def __len__(self) -> int:
         """Return the number of vectors in the index."""
@@ -173,9 +187,7 @@ class ElasticSearch(Search):
     @property
     def is_up(self) -> bool:
         """Check if the index is up."""
-        is_new_index = es_create_index(
-            self.config.index_name, es_instance=self.instance
-        )
+        is_new_index = es_create_index(self.index_name, es_instance=self.instance)
         instance_init = getattr(self, "_instance")
         return instance_init is not None and not is_new_index
 
@@ -205,7 +217,7 @@ class ElasticSearch(Search):
             ),
             filter_key=self.full_key(self.config.index_field, self.config.filter_key),
             scale_auxiliary_weight_by_lengths=self.config.scale_auxiliary_weight_by_lengths,
-            index_name=self.config.index_name,
+            index_name=self.index_name,
             es_instance=self.instance,
         )
         scores = output["scores"]
@@ -255,5 +267,10 @@ class ElasticSearch(Search):
         return state
 
     def __setstate__(self, state):
-        self.__dict__ = state
+        state = state.copy()
         state["_instance"] = Elasticsearch(timeout=state["config"].timeout)
+        self.__dict__.update(state)
+
+    def __del__(self):
+        if hasattr(self, "_instance") and isinstance(self._instance, Elasticsearch):
+            self._instance.close()

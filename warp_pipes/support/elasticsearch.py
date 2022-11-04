@@ -50,7 +50,7 @@ def es_search(
     beta = _get_scaled_auxiliary_weight(auxiliary_weight, batch[query_key],
     batch[auxiliary_query_key])
     ```
-    With filtering, only documents nmatching `batch[filter_key]` on the field `filter_key` are
+    With filtering, only documents matching `batch[filter_key]` on the field `filter_key` are
     returned.
 
     Args:
