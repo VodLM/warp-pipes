@@ -5,12 +5,14 @@ from typing import List
 from typing import Optional
 from typing import Union
 
+import datasets
 import numpy as np
 from datasets import Dataset
 from datasets import DatasetDict
 from datasets import Split
 from omegaconf import DictConfig
 
+from warp_pipes.core.condition import Condition
 from warp_pipes.support.fingerprint import get_fingerprint
 
 HfDataset = Union[Dataset, DatasetDict]
@@ -90,21 +92,58 @@ def remove_columns_with_fingerprint(dataset: Dataset, columns: List[str]) -> Dat
     return dataset.remove_columns(columns, new_fingerprint=new_fingerprint)
 
 
-def keep_only_columns(dataset: HfDataset, columns: Optional[List[str]]) -> HfDataset:
+def keep_only_columns(
+    dataset: HfDataset, columns: Optional[List[str] | Condition]
+) -> HfDataset:
     """Keep only the given columns and set a fingerprint deterministically"""
     if columns is None:
         return dataset
     else:
-        cols = [c for c in get_column_names(dataset) if c not in columns]
-        if isinstance(dataset, Dataset):
-            return remove_columns_with_fingerprint(dataset, cols)
-        elif isinstance(dataset, DatasetDict):
-            return DatasetDict(
-                {
-                    k: remove_columns_with_fingerprint(v, cols)
-                    for k, v in dataset.items()
-                }
-            )
+        if isinstance(columns, list):
+            cols_to_drop = [c for c in get_column_names(dataset) if c not in columns]
+        elif isinstance(columns, Condition):
+            cols_to_drop = [c for c in get_column_names(dataset) if not columns(c)]
+        else:
+            raise ValueError(f"Unsupported columns type: {type(columns)}")
+
+        dataset = remove_columns(dataset, cols_to_drop)
+
+        return dataset
+
+
+def remove_columns(dataset: HfDataset, cols_to_drop: List[str]) -> HfDataset:
+    if isinstance(dataset, Dataset):
+        dataset = remove_columns_with_fingerprint(dataset, cols_to_drop)
+    elif isinstance(dataset, DatasetDict):
+        dataset = DatasetDict(
+            {
+                k: remove_columns_with_fingerprint(v, cols_to_drop)
+                for k, v in dataset.items()
+            }
+        )
+    else:
+        raise TypeError(f"Unsupported dataset type: {type(dataset)}")
+    return dataset
+
+
+def concatenate_datasets(dsets: List[HfDataset], **kwargs) -> HfDataset:
+    types = [type(ds) for ds in dsets]
+    if len(set(types)) > 1:
+        raise ValueError(f"All datasets must be of the same type. Found {types}")
+    dset_type = types[0]
+    if dset_type == Dataset:
+        dataset = datasets.concatenate_datasets(dsets, **kwargs)
+    elif dset_type == DatasetDict:
+        keys = set.union(*[set(ds.keys()) for ds in dsets])
+        dataset = DatasetDict(
+            {
+                k: datasets.concatenate_datasets([dset[k] for dset in dsets], **kwargs)
+                for k in keys
+            }
+        )
+    else:
+        raise TypeError(f"Unsupported dataset type: {dset_type}")
+    return dataset
 
 
 def get_dataset_fingerprints(

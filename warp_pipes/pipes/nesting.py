@@ -7,13 +7,20 @@ from typing import List
 from typing import Optional
 from typing import T
 
+import datasets
 import numpy as np
 from datasets import Dataset
+from datasets import DatasetDict
 from torch import Tensor
 
 from warp_pipes.core.pipe import Pipe
 from warp_pipes.pipes.basics import ApplyToAll
 from warp_pipes.pipes.basics import Identity
+from warp_pipes.support.datasets_utils import concatenate_datasets
+from warp_pipes.support.datasets_utils import get_column_names
+from warp_pipes.support.datasets_utils import HfDataset
+from warp_pipes.support.datasets_utils import keep_only_columns
+from warp_pipes.support.datasets_utils import remove_columns
 from warp_pipes.support.datastruct import Batch
 from warp_pipes.support.nesting import expand_and_repeat
 from warp_pipes.support.nesting import flatten_nested
@@ -125,14 +132,14 @@ class ApplyAsFlatten(Pipe):
         pipe: Pipe,
         level: int = 1,
         flatten_idx: bool = True,
-        flatten_dataset: bool = False,
+        flatten_as_dataset: bool = False,
         **kwargs,
     ):
         super(ApplyAsFlatten, self).__init__(**kwargs)
         self.pipe = pipe
         self.level = level
         self.flatten_idx = flatten_idx
-        self.flatten_dataset = flatten_dataset
+        self.flatten_as_dataset = flatten_as_dataset
         if level > 0:
             self.flatten = Flatten(level=level)
             self.nest = Nest(shape=None)
@@ -173,45 +180,75 @@ class ApplyAsFlatten(Pipe):
             )
         return output
 
-    def _call_dataset(self, dataset: Dataset, **kwargs) -> Dataset:
-        if not self.flatten_dataset or self.level == 0:
-            return super()._call_dataset(dataset, **kwargs)
+    def _call_dataset_dict(self, dataset: DatasetDict, **kwargs) -> DatasetDict:
+        return self._call_dataset_any(dataset, **kwargs)
+
+    def _call_dataset(
+        self,
+        dataset: Dataset,
+        **kwargs,
+    ) -> Dataset:
+        return self._call_dataset_any(dataset, **kwargs)
+
+    def _call_dataset_any(self, dataset: HfDataset, **kwargs) -> HfDataset:
+        if not self.flatten_as_dataset or self.level == 0:
+            if isinstance(dataset, Dataset):
+                return super()._call_dataset(dataset, **kwargs)
+            elif isinstance(dataset, DatasetDict):
+                return super()._call_dataset_dict(dataset, **kwargs)
+            else:
+                raise TypeError(f"Unsupported type: {type(dataset)}")
         else:
+            # filter the dataset
+            if self.input_filter is not None:
+                dataset = keep_only_columns(dataset, self.input_filter)
+
             desc = kwargs.pop("desc", type(self).__name__)
-            # infer the original shape of the batch
             batch_size = kwargs.pop("batch_size", 10)
-            dataset = self.flatten(
+            batch_eg = self._get_batch_example(batch_size, dataset)
+            input_full_shape = infer_batch_shape(batch_eg)
+            input_shape = input_full_shape[: self.flatten.level + 1]
+            flat_shape = [-1, *input_full_shape[len(input_shape) :]]
+            new_dataset = self.flatten(
                 dataset,
                 **kwargs,
                 batch_size=batch_size,
-                desc=f"{desc}: flatten (level={self.level})",
+                desc=f"{desc}: flatten ({input_full_shape} -> {flat_shape})",
             )
-            input_shape = infer_batch_shape(dataset[:batch_size])[
-                : self.flatten.level + 1
-            ]
             nested_batch_size = math.prod(input_shape)
             # transform the dataset
-            dataset = self.pipe(
-                dataset,
+            new_dataset = self.pipe(
+                new_dataset,
                 **kwargs,
                 batch_size=nested_batch_size,
                 desc=f"{desc}: {type(self.pipe).__name__}",
             )
             # re-nest
 
-            dataset = self.nest(
-                dataset,
+            new_dataset = self.nest(
+                new_dataset,
                 **kwargs,
                 batch_size=nested_batch_size,
-                desc=f"{desc}: nest (level={self.level})",
+                desc=f"{desc}: reshape ({flat_shape} -> {input_full_shape})",
                 shape=input_shape,
             )
 
-            return dataset
+            # update the dataset
+            if self.update:
+                cols = get_column_names(dataset)
+                cols_to_remove = [c for c in get_column_names(new_dataset) if c in cols]
+                missing_columns = remove_columns(dataset, cols_to_remove)
+                new_dataset = concatenate_datasets(
+                    [missing_columns, new_dataset], axis=1
+                )
 
-        # 1. flatten
-        # 2. apply pipe
-        # 3. re-nest
+            return new_dataset
+
+    def _get_batch_example(self, batch_size, dataset):
+        if isinstance(dataset, DatasetDict):
+            dataset = next(iter(dataset.values()))
+        batch_eg = dataset[:batch_size]
+        return batch_eg
 
     @classmethod
     def instantiate_test(cls, **kwargs) -> None:

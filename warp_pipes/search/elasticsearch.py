@@ -52,7 +52,7 @@ class ElasticSearchConfig(SearchConfig):
     timeout: Optional[int] = 60
     es_body: Optional[Dict] = None
     main_key: str = "text"
-    auxiliary_key: str = "title"
+    auxiliary_field: Optional[str] = "answer"
     filter_key: Optional[str] = None
     ingest_batch_size: int = 1000
     auxiliary_weight: float = 0
@@ -68,7 +68,7 @@ class ElasticSearch(Search):
 
     @property
     def input_keys(self):
-        keys = [self.config.main_key, self.config.auxiliary_key, self.config.filter_key]
+        keys = [self.config.main_key, self.config.filter_key]
         keys = filter(None, keys)
         return list(keys)
 
@@ -78,7 +78,13 @@ class ElasticSearch(Search):
 
     @property
     def query_columns(self):
-        return [self.full_key(self.config.query_field, k) for k in self.input_keys]
+        columns = [self.full_key(self.config.query_field, k) for k in self.input_keys]
+        if self.config.auxiliary_field is not None:
+            columns.append(
+                self.full_key(self.config.auxiliary_field, self.config.main_key)
+            )
+
+        return columns
 
     def _build(
         self,
@@ -213,7 +219,7 @@ class ElasticSearch(Search):
             auxiliary_weight=self.config.auxiliary_weight,
             query_key=self.full_key(self.config.index_field, self.config.main_key),
             auxiliary_key=self.full_key(
-                self.config.index_field, self.config.auxiliary_key
+                self.config.auxiliary_field, self.config.main_key
             ),
             filter_key=self.full_key(self.config.index_field, self.config.filter_key),
             scale_auxiliary_weight_by_lengths=self.config.scale_auxiliary_weight_by_lengths,

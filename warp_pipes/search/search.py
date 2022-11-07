@@ -12,6 +12,7 @@ from typing import Tuple
 
 import numpy as np
 import omegaconf
+import rich
 import torch
 from datasets import Dataset
 from hydra.utils import instantiate
@@ -305,7 +306,8 @@ class Search(Pipe, metaclass=abc.ABCMeta):
                 indices=indices_i,
                 scores=scores_i,
                 **kwargs,
-            ).to(format)
+            )
+            r = r.to(format)
 
             # potentially resize the results
             if self.config.k_max is not None:
@@ -360,7 +362,7 @@ class Search(Pipe, metaclass=abc.ABCMeta):
     @staticmethod
     def full_key(field: str, key: Optional[str]) -> Optional[str]:
         """Return the full key for a given field and key."""
-        if key is None:
+        if key is None or field is None:
             return None
         return f"{field}.{key}"
 

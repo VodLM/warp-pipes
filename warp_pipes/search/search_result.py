@@ -139,13 +139,14 @@ def masked_fill(
         raise TypeError(f"Unsupported type: {type(arr)}")
 
 
-def concat_tensors(*a: TensorLike, dim=0) -> TensorLike:
+def concat_tensors(a: List[TensorLike], dim=0) -> TensorLike:
     """Concatenate tensors along a given dimension."""
-    arr_type = type(a[0])
-    assert all(isinstance(x, arr_type) for x in a)
-    if arr_type == np.ndarray:
+    arr_types = [type(b) for b in a]
+    if not all(arr_types[0] == b for b in arr_types):
+        raise TypeError(f"Incompatible types: {arr_types}")
+    if arr_types[0] == np.ndarray:
         return np.concatenate(a, axis=dim)
-    elif arr_type == Tensor:
+    elif arr_types[0] == Tensor:
         return torch.cat(a, dim=dim)
     else:
         raise TypeError(f"Unsupported type: {type(a[0])}")
@@ -170,9 +171,6 @@ class SearchResult:
         self.scores = formatter(scores)
         self.indices = formatter(indices)
 
-        self.scores = formatter(self.scores)
-        self.indices = formatter(self.indices)
-
         # check shapes
         assert self.scores.shape == self.indices.shape
         assert len(self.scores.shape) == 2
@@ -181,16 +179,16 @@ class SearchResult:
         scores_shape = self.scores.shape
         indices_shape = self.indices.shape
         return (
-            f"{type(self).__name__}(scores={scores_shape}, "
-            f"indices={indices_shape}, "
+            f"{type(self).__name__}(scores={scores_shape} ({type(self.scores)}), "
+            f"indices={indices_shape} ({type(self.indices)}), "
             f"format={self.format})"
         )
 
     def to(self, format: Optional[TensorFormat] = None) -> "SearchResult":
         formatter = TensorHandler(format)
-        self.indices = formatter(self.indices)
-        self.scores = formatter(self.scores)
-        return self
+        new_indices = formatter(self.indices)
+        new_scores = formatter(self.scores)
+        return self.copy(scores=new_scores, indices=new_indices, format=format)
 
     def copy(self, **new_attrs) -> "SearchResult":
         new_instance = copy(self)
@@ -271,6 +269,12 @@ class SearchResult:
             new_indices < 0, torch.randint_like(new_indices, *value_range), new_indices
         )
         return self.copy(indices=new_indices).to(format=self.format)
+
+    def append(self, other: "SearchResult") -> "SearchResult":
+        other = other.to(format=self.format)
+        new_indices = concat_tensors([self.indices, other.indices], dim=0)
+        new_scores = concat_tensors([self.scores, other.scores], dim=0)
+        return self.copy(indices=new_indices, scores=new_scores)
 
 
 def sum_scores(

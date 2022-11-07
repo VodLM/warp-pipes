@@ -25,7 +25,6 @@ from warp_pipes.support.datasets_utils import HfDataset
 from warp_pipes.support.datastruct import Batch
 from warp_pipes.support.shapes import infer_batch_shape
 
-MAX_INDEX_CACHE_AGE = 60 * 60 * 24 * 3  # 3 days
 TEMPDIR_SUFFIX = "-tempdir"
 
 
@@ -203,6 +202,10 @@ class Index(Pipe):
         # process the dataset with the Engines
         kwargs["set_new_fingerprint"] = True
         kwargs["print_fringerprint_dict"] = False
+        if "desc" in kwargs:
+            desc_ = f': {kwargs.pop("desc")}'
+        else:
+            desc_ = ""
         for engine in self.engines:
             if isinstance(dataset, DatasetDict):
                 dataset = DatasetDict(
@@ -212,7 +215,7 @@ class Index(Pipe):
                             vectors=vectors.get(split, None)
                             if engine.require_vectors
                             else None,
-                            desc=f"{type(engine).__name__} ({split})",
+                            desc=f"{type(engine).__name__} ({split}){desc_}",
                             **kwargs,
                         )
                         for split, dset in dataset.items()
@@ -222,7 +225,7 @@ class Index(Pipe):
                 dataset = engine(
                     dataset,
                     vectors=vectors if engine.require_vectors else None,
-                    desc=f"{type(engine).__name__}",
+                    desc=f"{type(engine).__name__}{desc_}",
                     **kwargs,
                 )
             else:

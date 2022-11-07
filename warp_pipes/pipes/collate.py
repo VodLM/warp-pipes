@@ -4,6 +4,7 @@ from typing import Iterable
 from typing import List
 from typing import Optional
 
+import numpy as np
 import torch
 from torch import Tensor
 from transformers import PreTrainedTokenizerFast
@@ -113,10 +114,19 @@ class ApplyToEachExample(Pipe):
 
 
 def to_tensor_op(inputs: List[Any]) -> Tensor:
-    if all(isinstance(x, Tensor) for x in inputs):
-        return torch.cat([t[None] for t in inputs])
+    if isinstance(inputs, Tensor):
+        return inputs
+    elif isinstance(inputs, np.ndarray):
+        return torch.from_numpy(inputs)
     else:
-        return torch.tensor(inputs)
+        try:
+            return torch.tensor(inputs)
+        except Exception as exc:
+            if isinstance(inputs, list):
+                inputs = [to_tensor_op(i) for i in inputs]
+                return torch.stack(inputs)
+            else:
+                raise exc
 
 
 class Padding(Pipe):
