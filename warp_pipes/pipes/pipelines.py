@@ -9,14 +9,14 @@ from typing import T
 from typing import Tuple
 from typing import Union
 
+from warp_pipes import repr_batch
 from warp_pipes.core.condition import HasPrefix
 from warp_pipes.core.condition import Static
 from warp_pipes.core.pipe import Pipe
 from warp_pipes.pipes.basics import Identity
+from warp_pipes.pipes.pprint import PrintBatch
 from warp_pipes.support.datastruct import Batch
 from warp_pipes.support.functional import check_equal_arrays
-from warp_pipes.support.pretty import pprint_batch
-from warp_pipes.support.pretty import repr_batch
 
 
 class PipeProcessError(Exception):
@@ -208,12 +208,12 @@ class BlockSequential(Pipeline):
         """Call the pipes sequentially."""
         for name, block in self.blocks.items():
             if self.pprint:
-                pprint_batch(batch, f"{name}::input")
+                PrintBatch(f"{name}::input")(batch)
             batch = _call_pipe_and_handle_exception(
                 block, batch, **kwargs, pipeline=self
             )
             if self.pprint:
-                pprint_batch(batch, f"{name}::output")
+                PrintBatch(f"{name}::output")(batch)
 
         return batch
 

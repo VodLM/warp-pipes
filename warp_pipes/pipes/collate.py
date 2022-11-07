@@ -25,6 +25,7 @@ from warp_pipes.pipes.nesting import ApplyAsFlatten
 from warp_pipes.pipes.pipelines import Gate
 from warp_pipes.pipes.pipelines import Parallel
 from warp_pipes.pipes.pipelines import Sequential
+from warp_pipes.pipes.pprint import PrintBatch
 from warp_pipes.support.datastruct import Batch
 from warp_pipes.support.datastruct import Eg
 
@@ -124,8 +125,11 @@ def to_tensor_op(inputs: List[Any]) -> Tensor:
         except Exception as exc:
             if isinstance(inputs, list):
                 inputs = [to_tensor_op(i) for i in inputs]
-                return torch.stack(inputs)
+                return torch.stack(inputs, dim=0)
             else:
+                import rich
+
+                rich.print(inputs)
                 raise exc
 
 

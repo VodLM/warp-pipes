@@ -17,9 +17,9 @@ from tqdm.auto import tqdm
 
 from warp_pipes.core.condition import In
 from warp_pipes.pipes import RenameKeys
+from warp_pipes.search.result import SearchResult
 from warp_pipes.search.search import Search
 from warp_pipes.search.search import SearchConfig
-from warp_pipes.search.search_result import SearchResult
 from warp_pipes.support.datasets_utils import keep_only_columns
 from warp_pipes.support.datastruct import Batch
 from warp_pipes.support.elasticsearch import es_create_index

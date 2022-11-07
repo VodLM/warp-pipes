@@ -11,9 +11,9 @@ import torch  # type: ignore
 from datasets import Dataset
 from loguru import logger
 
+from warp_pipes.search.result import SearchResult
 from warp_pipes.search.search import Search
 from warp_pipes.search.search import SearchConfig
-from warp_pipes.search.search_result import SearchResult
 from warp_pipes.search.vector_base import VectorBase
 from warp_pipes.search.vector_base.auto import AutoVectorBase
 from warp_pipes.search.vector_base.base import VectorBaseConfig

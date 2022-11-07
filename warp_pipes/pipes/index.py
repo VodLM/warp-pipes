@@ -8,6 +8,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+import omegaconf
 import pytorch_lightning as pl
 from datasets import Dataset
 from datasets import DatasetDict
@@ -66,12 +67,12 @@ class Index(Pipe):
         # register the Engines
         if isinstance(engines, (dict, DictConfig)):
             assert all(isinstance(cfg, (dict, DictConfig)) for cfg in engines.values())
-            engines = [{**{"name": k}, **v} for k, v in engines.items()]
+            engines = [v for k, v in engines.items()]
 
         self.engines_config = copy(engines)
         self.engines = []
         for engine in engines:
-            if isinstance(engine, dict):
+            if isinstance(engine, (dict, DictConfig)):
                 engine_config = AutoSearchConfig(
                     name=engine["name"], config=engine["config"]
                 )
@@ -85,7 +86,7 @@ class Index(Pipe):
             # set the engine path
             engine_path = cache_dir / f"search-{engine_config.fingerprint}"
 
-            if isinstance(engine, dict):
+            if isinstance(engine, (dict, DictConfig)):
                 engine = AutoSearchEngine(
                     name=engine["name"], path=engine_path, config=engine_config
                 )
@@ -237,7 +238,9 @@ class Index(Pipe):
         return dataset
 
     def __repr__(self):
-        return f"{type(self).__name__}(engines={self.engines_config})"
+        return (
+            f"{type(self).__name__}(engines={[type(e).__name__ for e in self.engines]})"
+        )
 
     @classmethod
     def instantiate_test(cls, cache_dir: Path, **kwargs) -> "Search":

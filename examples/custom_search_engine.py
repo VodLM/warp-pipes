@@ -15,7 +15,7 @@ from datasets import Dataset
 
 from warp_pipes.support.datastruct import Batch
 from warp_pipes.search import Search
-from warp_pipes.search.search_result import SearchResult
+from warp_pipes.search.result import SearchResult
 from warp_pipes.support.tensor_handler import TensorFormat, TensorLike, TensorHandler
 
 

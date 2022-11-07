@@ -7,7 +7,6 @@ from typing import List
 from typing import Optional
 from typing import T
 
-import datasets
 import numpy as np
 from datasets import Dataset
 from datasets import DatasetDict
@@ -30,6 +29,10 @@ from warp_pipes.support.nesting import reconcat
 from warp_pipes.support.pretty import repr_batch
 from warp_pipes.support.shapes import infer_batch_shape
 from warp_pipes.support.shapes import infer_batch_size
+
+
+def fshp(shp):
+    return str(shp).replace("]", ", ...]")
 
 
 class Flatten(ApplyToAll):
@@ -207,29 +210,33 @@ class ApplyAsFlatten(Pipe):
             batch_size = kwargs.pop("batch_size", 10)
             batch_eg = self._get_batch_example(batch_size, dataset)
             input_full_shape = infer_batch_shape(batch_eg)
+            input_full_shape[0] = -1
             input_shape = input_full_shape[: self.flatten.level + 1]
+            flatten_batch_size = batch_size * math.prod(input_shape[1:])
             flat_shape = [-1, *input_full_shape[len(input_shape) :]]
             new_dataset = self.flatten(
                 dataset,
                 **kwargs,
                 batch_size=batch_size,
-                desc=f"{desc}: flatten ({input_full_shape} -> {flat_shape})",
+                desc=f"{desc}: {fshp(input_full_shape)} -> {fshp(flat_shape)}",
             )
-            nested_batch_size = math.prod(input_shape)
+
             # transform the dataset
             new_dataset = self.pipe(
                 new_dataset,
                 **kwargs,
-                batch_size=nested_batch_size,
+                batch_size=flatten_batch_size,
                 desc=f"{desc}: {type(self.pipe).__name__}",
             )
-            # re-nest
 
+            # re-shape
+            # NB: `num_proc=1` : avoid splitting a single example across multiple workers
+            kwargs = {**kwargs, "num_proc": 1}
             new_dataset = self.nest(
                 new_dataset,
                 **kwargs,
-                batch_size=nested_batch_size,
-                desc=f"{desc}: reshape ({flat_shape} -> {input_full_shape})",
+                batch_size=flatten_batch_size,
+                desc=f"{desc}: {fshp(flat_shape)} -> {fshp(input_full_shape)}",
                 shape=input_shape,
             )
 

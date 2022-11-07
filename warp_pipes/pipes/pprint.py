@@ -59,7 +59,8 @@ class PrintBatch(Pipe):
     def _call_egs(self, examples: List[Eg], **kwargs) -> List[Eg]:
         header = f"{self.header} : " if self.header is not None else ""
         try:
-            pprint_batch(examples[0], header=f"{header}First example")
+            for i, eg in enumerate(examples):
+                pprint_batch(eg, header=f"{header}example #{i}")
         except Exception:
             rich.print(f"#{header}Failed to print using pprint_batch. First Example:")
             rich.print(examples[0])

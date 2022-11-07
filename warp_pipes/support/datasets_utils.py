@@ -11,6 +11,7 @@ from datasets import Dataset
 from datasets import DatasetDict
 from datasets import Split
 from omegaconf import DictConfig
+from omegaconf import ListConfig
 
 from warp_pipes.core.condition import Condition
 from warp_pipes.support.fingerprint import get_fingerprint
@@ -99,7 +100,7 @@ def keep_only_columns(
     if columns is None:
         return dataset
     else:
-        if isinstance(columns, list):
+        if isinstance(columns, (list, set, ListConfig)):
             cols_to_drop = [c for c in get_column_names(dataset) if c not in columns]
         elif isinstance(columns, Condition):
             cols_to_drop = [c for c in get_column_names(dataset) if not columns(c)]

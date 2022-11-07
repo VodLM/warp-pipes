@@ -22,7 +22,7 @@ from omegaconf import ListConfig
 
 from warp_pipes.core.pipe import Pipe
 from warp_pipes.search.config import FingerprintableConfig
-from warp_pipes.search.search_result import SearchResult
+from warp_pipes.search.result import SearchResult
 from warp_pipes.support.datastruct import Batch
 from warp_pipes.support.functional import camel_to_snake
 from warp_pipes.support.functional import get_batch_eg
@@ -327,6 +327,7 @@ class Search(Pipe, metaclass=abc.ABCMeta):
 
         # format the output
         search_results = search_results.to(format=format)
+        search_results = search_results.resize(1000)  # todo: remove this line
         output = {
             self.index_key: search_results.indices,
             self.score_key: search_results.scores,
