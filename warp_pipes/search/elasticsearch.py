@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import math
@@ -12,7 +13,7 @@ from typing import Optional
 import omegaconf
 import pydantic
 from datasets import Dataset
-from elasticsearch import Elasticsearch
+from elasticsearch import AsyncElasticsearch
 from loguru import logger
 from tqdm.auto import tqdm
 
@@ -115,8 +116,11 @@ class ElasticSearch(Search):
         self._init_es_instance()
 
         # init the index
-        is_new_index = es_create_index(
-            self.index_name, body=self.config.es_body, es_instance=self.instance
+        loop = asyncio.get_event_loop()
+        is_new_index = loop.run_until_complete(
+            es_create_index(
+                self.index_name, body=self.config.es_body, es_instance=self.instance
+            )
         )
         if not is_new_index:
             logger.info(
@@ -125,21 +129,22 @@ class ElasticSearch(Search):
 
         # build the index
         if is_new_index:
-            batch_size = self.config.ingest_batch_size
-            try:
-                for i in tqdm(
-                    range(0, len(corpus), batch_size), desc="Ingesting ES index"
-                ):
-                    batch = corpus[i : i + batch_size]
-                    batch[self.config.es_index_key] = list(
-                        range(i, min(len(corpus), i + batch_size))
-                    )
 
-                    _ = es_ingest(
-                        batch,
+            async def yield_egs(corpus):
+                for i in tqdm(range(len(corpus)), desc="Ingesting ES index"):
+                    eg = corpus[i]
+                    eg[self.config.es_index_key] = i
+                    yield eg
+
+            try:
+
+                loop.run_until_complete(
+                    es_ingest(
                         index_name=self.index_name,
+                        egs=yield_egs(corpus),
                         es_instance=self.instance,
                     )
+                )
             except Exception as ex:
                 # clean up the index if something went wrong
                 es_remove_index(self.index_name, es_instance=self.instance)
@@ -153,7 +158,7 @@ class ElasticSearch(Search):
             "debug": logging.DEBUG,
         }[self.config.es_logging_level]
         logging.getLogger("elasticsearch").setLevel(log_level)
-        self._instance = Elasticsearch(timeout=self.config.timeout)
+        self._instance = AsyncElasticsearch(timeout=self.config.timeout)
 
     @property
     def special_attrs_file(self):
@@ -201,7 +206,10 @@ class ElasticSearch(Search):
     @property
     def is_up(self) -> bool:
         """Check if the index is up."""
-        is_new_index = es_create_index(self.index_name, es_instance=self.instance)
+        loop = asyncio.get_event_loop()
+        is_new_index = loop.run_until_complete(
+            es_create_index(self.index_name, es_instance=self.instance)
+        )
         instance_init = getattr(self, "_instance")
         return instance_init is not None and not is_new_index
 
@@ -221,18 +229,23 @@ class ElasticSearch(Search):
         query = rename_input_fields(query)
 
         # query Elastic Search
-        output = es_search(
-            query,
-            k=k,
-            auxiliary_weight=self.config.auxiliary_weight,
-            query_key=self.full_key(self.config.index_field, self.config.main_key),
-            auxiliary_key=self.full_key(
-                self.config.auxiliary_field, self.config.main_key
-            ),
-            filter_key=self.full_key(self.config.index_field, self.config.filter_key),
-            scale_auxiliary_weight_by_lengths=self.config.scale_auxiliary_weight_by_lengths,
-            index_name=self.index_name,
-            es_instance=self.instance,
+        loop = asyncio.get_event_loop()
+        output = loop.run_until_complete(
+            es_search(
+                query,
+                k=k,
+                auxiliary_weight=self.config.auxiliary_weight,
+                query_key=self.full_key(self.config.index_field, self.config.main_key),
+                auxiliary_key=self.full_key(
+                    self.config.auxiliary_field, self.config.main_key
+                ),
+                filter_key=self.full_key(
+                    self.config.index_field, self.config.filter_key
+                ),
+                scale_auxiliary_weight_by_lengths=self.config.scale_auxiliary_weight_by_lengths,
+                index_name=self.index_name,
+                es_instance=self.instance,
+            )
         )
         scores = output["scores"]
         indices = output[self.config.es_index_key]
@@ -281,9 +294,11 @@ class ElasticSearch(Search):
 
     def __setstate__(self, state):
         state = state.copy()
-        state["_instance"] = Elasticsearch(timeout=state["config"].timeout)
+        state["_instance"] = AsyncElasticsearch(timeout=state["config"].timeout)
         self.__dict__.update(state)
 
     def __del__(self):
-        if hasattr(self, "_instance") and isinstance(self._instance, Elasticsearch):
-            self._instance.close()
+        if hasattr(self, "_instance") and isinstance(
+            self._instance, AsyncElasticsearch
+        ):
+            asyncio.run(self._instance.close())

@@ -5,24 +5,29 @@ import subprocess
 import time
 from collections import defaultdict
 from copy import copy
+from typing import AsyncGenerator
+from typing import AsyncIterator
 from typing import Dict
+from typing import Iterable
 from typing import List
 from typing import Optional
 
+import rich
 import torch
-from elasticsearch import Elasticsearch
+from elasticsearch import AsyncElasticsearch
 from elasticsearch import helpers as es_helpers
 from elasticsearch import RequestError
 from loguru import logger
 
 from warp_pipes.support.datastruct import Batch
+from warp_pipes.support.datastruct import Eg
 from warp_pipes.support.functional import iter_batch_egs
 
 
-def es_search(
+async def es_search(
     batch: Batch,
     *,
-    es_instance: Elasticsearch,
+    es_instance: AsyncElasticsearch,
     index_name: str,
     query_key: str,
     auxiliary_key: Optional[str] = None,
@@ -55,7 +60,7 @@ def es_search(
 
     Args:
         batch (:obj:`Batch`): input query
-        es_instance (:obj:`Elasticsearch`): Elasticsearch instance
+        es_instance (:obj:`AsyncElasticsearch`): AsyncElasticsearch instance
         index_name (:obj:`str`): name of the elasticsearch index
         query_key (:obj:`str`): name of the elasticsearch field to query and name of the key in the
             batch
@@ -135,7 +140,7 @@ def es_search(
         request.extend([{"index": index_name}, r])
 
     # run the search
-    result = es_instance.msearch(
+    result = await es_instance.msearch(
         body=request, index=index_name, request_timeout=request_timeout
     )
 
@@ -156,11 +161,11 @@ def es_search(
     return results
 
 
-def es_create_index(
-    index_name: str, *, es_instance: Elasticsearch, body: Optional[Dict] = None
+async def es_create_index(
+    index_name: str, *, es_instance: AsyncElasticsearch, body: Optional[Dict] = None
 ) -> bool:
     try:
-        response = es_instance.indices.create(index=index_name, body=body)
+        response = await es_instance.indices.create(index=index_name, body=body)
         logger.info(response)
         newly_created = True
 
@@ -173,29 +178,27 @@ def es_create_index(
     return newly_created
 
 
-def es_remove_index(index_name: str, *, es_instance: Elasticsearch):
+def es_remove_index(index_name: str, *, es_instance: AsyncElasticsearch):
     return es_instance.indices.delete(index=index_name)
 
 
-def es_ingest(
-    batch: Batch,
+async def es_ingest(
+    egs: AsyncIterator[Eg],
     *,
-    es_instance: Elasticsearch,
+    es_instance: AsyncElasticsearch,
     index_name: str,
-    chunk_size=1000,
-    request_timeout=200,
 ):
-    def gen_actions(batch, index_name):
-        for eg in iter_batch_egs(batch):
+    async def gen_actions(egs, index_name):
+        async for eg in egs:
             yield {"_index": index_name, "_source": eg}
 
-    return es_helpers.bulk(
+    async for ok, result in es_helpers.async_streaming_bulk(
         es_instance,
-        gen_actions(batch, index_name),
-        chunk_size=chunk_size,
-        request_timeout=request_timeout,
-        refresh="true",
-    )
+        gen_actions(egs, index_name),
+    ):
+        action, result = result.popitem()
+        if not ok:
+            raise ValueError(f"Failed to {action}: {result}")
 
 
 def ping_es(host=None, **kwargs):
@@ -203,7 +206,7 @@ def ping_es(host=None, **kwargs):
         hosts = None
     else:
         hosts = [host]
-    return Elasticsearch(hosts=hosts).ping(**kwargs)
+    return AsyncElasticsearch(hosts=hosts).ping(**kwargs)
 
 
 class ElasticSearchInstance(object):
