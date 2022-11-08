@@ -185,18 +185,13 @@ def es_ingest(
     chunk_size=1000,
     request_timeout=200,
 ):
-    actions = []
-    for eg in iter_batch_egs(batch):
-        actions.append(
-            {
-                "_index": index_name,
-                "_source": eg,
-            }
-        )
+    def gen_actions(batch, index_name):
+        for eg in iter_batch_egs(batch):
+            yield {"_index": index_name, "_source": eg}
 
     return es_helpers.bulk(
         es_instance,
-        actions,
+        gen_actions(batch, index_name),
         chunk_size=chunk_size,
         request_timeout=request_timeout,
         refresh="true",

@@ -284,7 +284,7 @@ class Search(Pipe, metaclass=abc.ABCMeta):
             if vectors is None or self.require_vectors is False:
                 q_vectors_i = None
             else:
-                idx_i = idx[i : i + eff_batch_size]
+                idx_i = None if idx is None else idx[i : i + eff_batch_size]
                 q_vectors_i = TensorHandler(TensorFormat.TORCH)(vectors, key=idx_i)
             if prev_search_results is not None:
                 prev_search_results_i = prev_search_results[i : i + eff_batch_size]
