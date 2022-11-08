@@ -9,7 +9,6 @@ from typing import T
 from typing import Tuple
 from typing import Union
 
-from warp_pipes import repr_batch
 from warp_pipes.core.condition import HasPrefix
 from warp_pipes.core.condition import Static
 from warp_pipes.core.pipe import Pipe
@@ -17,6 +16,7 @@ from warp_pipes.pipes.basics import Identity
 from warp_pipes.pipes.pprint import PrintBatch
 from warp_pipes.support.datastruct import Batch
 from warp_pipes.support.functional import check_equal_arrays
+from warp_pipes.support.pretty import repr_batch
 
 
 class PipeProcessError(Exception):
@@ -31,8 +31,9 @@ class PipeProcessError(Exception):
 
         keys = _infer_keys(batch)
         kwargs = {k: type(v) for k, v in kwargs.items()}
+        id_str = f"( id={pipe.id})" if pipe.id else ""
         msg = (
-            f"Exception thrown by pipe: {type(pipe)} in Pipeline {type(pipeline)} with "
+            f"Exception thrown by pipe: {type(pipe)}{id_str} in Pipeline {type(pipeline)} with "
             f"batch of type {type(batch)} with keys={keys} "
             f"and kwargs={kwargs}. Batch=\n{batch_repr}"
         )

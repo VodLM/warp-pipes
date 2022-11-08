@@ -9,7 +9,8 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-import dill
+import omegaconf
+import pydantic
 from datasets import Dataset
 from elasticsearch import Elasticsearch
 from loguru import logger
@@ -49,7 +50,7 @@ class ElasticSearchConfig(SearchConfig):
     ]
 
     es_index_key: str = "__ROW_IDX__"
-    timeout: Optional[int] = 60
+    timeout: Optional[int] = 180
     es_body: Optional[Dict] = None
     main_key: str = "text"
     auxiliary_field: Optional[str] = "answer"
@@ -59,6 +60,12 @@ class ElasticSearchConfig(SearchConfig):
     scale_auxiliary_weight_by_lengths: bool = True
     es_temperature: float = 1.0
     es_logging_level: str = "error"
+
+    @pydantic.validator("es_body", pre=True)
+    def _check_es_body(cls, v):
+        if isinstance(v, omegaconf.DictConfig):
+            v = omegaconf.OmegaConf.to_object(v)
+        return v
 
 
 class ElasticSearch(Search):
@@ -98,6 +105,7 @@ class ElasticSearch(Search):
 
         # keep only the relevant columns
         corpus = keep_only_columns(corpus, self.index_columns)
+        logger.info(f"Indexing {len(corpus)} documents, columns={corpus.column_names}")
 
         # set a unique index name
         self.index_name = self._get_index_name(corpus, self.config)
@@ -268,8 +276,7 @@ class ElasticSearch(Search):
         # Don't pickle the ES instances
         for attr in ["_instance"]:
             if attr in state:
-                state.pop(attr)
-
+                state[attr] = None
         return state
 
     def __setstate__(self, state):

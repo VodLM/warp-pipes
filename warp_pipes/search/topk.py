@@ -67,6 +67,7 @@ class TopkSearch(Search):
         idx = torch.argsort(scores, descending=True, dim=1)[:, :k]
         scores = scores.gather(1, index=idx)
         pids = pids.gather(1, index=idx)
+
         return scores, pids
 
     def _search_chunk(

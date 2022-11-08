@@ -54,10 +54,10 @@ class DenseSearch(Search):
         # train the index
         faiss_train_size = self.config.train_size
         random_train_subset = self.config.random_train_subset
-        if faiss_train_size is not None and faiss_train_size < len(vectors):
+        if faiss_train_size is not None and faiss_train_size < vectors.shape[0]:
             if random_train_subset:
                 train_ids = np.random.choice(
-                    len(vectors), faiss_train_size, replace=False
+                    vectors.shape[0], faiss_train_size, replace=False
                 )
             else:
                 train_ids = slice(None, faiss_train_size)

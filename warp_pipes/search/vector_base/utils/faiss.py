@@ -328,7 +328,7 @@ def populate_ivf_index(
     if max_add_per_gpu is not None and max_add_per_gpu >= 0:
         max_add = max_add_per_gpu * max(1, ngpu)
     else:
-        max_add = len(vectors)
+        max_add = vectors.shape[0]
 
     # cloner options
     co = faiss.GpuMultipleClonerOptions()
@@ -348,7 +348,7 @@ def populate_ivf_index(
     )
 
     # add the vectors
-    logger.info(f"Populating the index with {len(vectors)} vectors")
+    logger.info(f"Populating the index with vectors of shape {vectors.shape}")
     t0 = time.time()
     nb = vectors.shape[0]
     for i0, xs in tqdm(

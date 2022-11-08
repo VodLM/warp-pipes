@@ -9,6 +9,8 @@ import torch
 from pytorch_lightning import Callback
 
 from warp_pipes.support.datastruct import Batch
+from warp_pipes.support.tensor_handler import format_tensor
+from warp_pipes.support.tensor_handler import TensorFormat
 
 IDX_COL = "__idx__"
 
@@ -22,6 +24,8 @@ def write_vectors(
     """write a table to file."""
     if idx is None:
         raise ValueError("idx must be provided")
+
+    vectors = format_tensor(vectors, TensorFormat.NUMPY)
 
     if asynch:
         store[idx].write(vectors)

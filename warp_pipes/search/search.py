@@ -270,12 +270,6 @@ class Search(Pipe, metaclass=abc.ABCMeta):
                 format=format,
             )
 
-        # fetch the query vectors as Tensors
-        if vectors is None:
-            q_vectors = None
-        else:
-            q_vectors = TensorHandler(TensorFormat.TORCH)(vectors, key=idx)
-
         # search the index by chunk
         batch_size = infer_batch_size(query)
         search_results = None
@@ -285,12 +279,13 @@ class Search(Pipe, metaclass=abc.ABCMeta):
             eff_batch_size = batch_size
         for i in range(0, batch_size, eff_batch_size):
 
-            # slice the query
+            # slice the query and fetch the cached query vectors and previous results
             chunk_i = get_batch_eg(query, slice(i, i + eff_batch_size))
-            if q_vectors is not None:
-                q_vectors_i = q_vectors[i : i + eff_batch_size]
-            else:
+            if vectors is None or self.require_vectors is False:
                 q_vectors_i = None
+            else:
+                idx_i = idx[i : i + eff_batch_size]
+                q_vectors_i = TensorHandler(TensorFormat.TORCH)(vectors, key=idx_i)
             if prev_search_results is not None:
                 prev_search_results_i = prev_search_results[i : i + eff_batch_size]
                 indices_i = prev_search_results_i.indices
@@ -325,9 +320,9 @@ class Search(Pipe, metaclass=abc.ABCMeta):
         if prev_search_results is not None and self.config.merge_previous_results:
             search_results = search_results + prev_search_results
 
-        # format the output
+        # format the output (make sure to return `k` results.)
         search_results = search_results.to(format=format)
-        search_results = search_results.resize(1000)  # todo: remove this line
+        search_results = search_results.resize(self.config.k)
         output = {
             self.index_key: search_results.indices,
             self.score_key: search_results.scores,

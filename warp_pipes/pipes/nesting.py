@@ -204,18 +204,20 @@ class ApplyAsFlatten(Pipe):
         else:
             # filter the dataset
             if self.input_filter is not None:
-                dataset = keep_only_columns(dataset, self.input_filter)
+                new_dataset = keep_only_columns(dataset, self.input_filter)
+            else:
+                new_dataset = dataset
 
             desc = kwargs.pop("desc", type(self).__name__)
             batch_size = kwargs.pop("batch_size", 10)
-            batch_eg = self._get_batch_example(batch_size, dataset)
+            batch_eg = self._get_batch_example(batch_size, new_dataset)
             input_full_shape = infer_batch_shape(batch_eg)
             input_full_shape[0] = -1
             input_shape = input_full_shape[: self.flatten.level + 1]
             flatten_batch_size = batch_size * math.prod(input_shape[1:])
             flat_shape = [-1, *input_full_shape[len(input_shape) :]]
             new_dataset = self.flatten(
-                dataset,
+                new_dataset,
                 **kwargs,
                 batch_size=batch_size,
                 desc=f"{desc}: {fshp(input_full_shape)} -> {fshp(flat_shape)}",
@@ -226,7 +228,7 @@ class ApplyAsFlatten(Pipe):
                 new_dataset,
                 **kwargs,
                 batch_size=flatten_batch_size,
-                desc=f"{desc}: {type(self.pipe).__name__}",
+                desc=f"{desc}",
             )
 
             # re-shape
