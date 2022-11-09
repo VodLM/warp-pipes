@@ -24,7 +24,7 @@ from warp_pipes.search.search import Search
 from warp_pipes.search.search import SearchConfig
 from warp_pipes.support.datasets_utils import keep_only_columns
 from warp_pipes.support.datastruct import Batch
-from warp_pipes.support.elasticsearch import es_create_index
+from warp_pipes.support.elasticsearch import es_create_index, EsSearchFnConfig
 from warp_pipes.support.elasticsearch import es_ingest
 from warp_pipes.support.elasticsearch import es_remove_index
 from warp_pipes.support.elasticsearch import es_search
@@ -40,6 +40,7 @@ def _pad_to_length(lst: List, *, length: int, fill_token) -> List:
 class ElasticSearchConfig(SearchConfig):
     _no_fingerprint: List[str] = SearchConfig._no_fingerprint + [
         "_instance",
+        "_loop",
         "timeout",
         "es_logging_level",
         "ingest_batch_size",
@@ -69,7 +70,21 @@ class ElasticSearchConfig(SearchConfig):
         return v
 
 
+def _init_loop() -> asyncio.AbstractEventLoop:
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+
+    return loop
+
+
 class ElasticSearch(Search):
+    """An Elasticsearch index. This implementations uses `aysncio` to speed up indexing, although this has not
+    been tested extensively. This was a first attempt at using `asyncio` and this implementation can therefore probably
+    be improved.
+    """
+
     # TODO: fix multiprocessings
     _max_num_proc: int = 1
     _config_type = ElasticSearchConfig
@@ -95,14 +110,17 @@ class ElasticSearch(Search):
         return columns
 
     def _build(
-        self,
-        vectors: Optional[TensorLike] = None,
-        corpus: Optional[Dataset] = None,
-        **kwargs,
+            self,
+            vectors: Optional[TensorLike] = None,
+            corpus: Optional[Dataset] = None,
+            **kwargs,
     ):
 
         if corpus is None:
             raise ValueError("The corpus is required.")
+
+        # init asyncio event loop
+        self._loop = _init_loop()
 
         # keep only the relevant columns
         corpus = keep_only_columns(corpus, self.index_columns)
@@ -116,12 +134,10 @@ class ElasticSearch(Search):
         self._init_es_instance()
 
         # init the index
-        loop = asyncio.get_event_loop()
-        is_new_index = loop.run_until_complete(
-            es_create_index(
-                self.index_name, body=self.config.es_body, es_instance=self.instance
-            )
-        )
+        is_new_index = self.loop.run_until_complete(es_create_index(
+            self.index_name, body=self.config.es_body, es_instance=self.instance
+        ))
+
         if not is_new_index:
             logger.info(
                 f"ElasticSearch index with name=`{self.index_name}` already exists."
@@ -129,16 +145,14 @@ class ElasticSearch(Search):
 
         # build the index
         if is_new_index:
-
             async def yield_egs(corpus):
-                for i in tqdm(range(len(corpus)), desc="Ingesting ES index"):
+                async for i in tqdm(range(len(corpus)), desc="Ingesting ES index"):
                     eg = corpus[i]
                     eg[self.config.es_index_key] = i
                     yield eg
 
             try:
-
-                loop.run_until_complete(
+                self.loop.run_until_complete(
                     es_ingest(
                         index_name=self.index_name,
                         egs=yield_egs(corpus),
@@ -147,7 +161,7 @@ class ElasticSearch(Search):
                 )
             except Exception as ex:
                 # clean up the index if something went wrong
-                es_remove_index(self.index_name, es_instance=self.instance)
+                self.loop.run_until_complete(es_remove_index(self.index_name, es_instance=self.instance))
                 raise ex
 
     def _init_es_instance(self):
@@ -206,8 +220,7 @@ class ElasticSearch(Search):
     @property
     def is_up(self) -> bool:
         """Check if the index is up."""
-        loop = asyncio.get_event_loop()
-        is_new_index = loop.run_until_complete(
+        is_new_index = self.loop.run_until_complete(
             es_create_index(self.index_name, es_instance=self.instance)
         )
         instance_init = getattr(self, "_instance")
@@ -229,22 +242,24 @@ class ElasticSearch(Search):
         query = rename_input_fields(query)
 
         # query Elastic Search
-        loop = asyncio.get_event_loop()
-        output = loop.run_until_complete(
+        output = self.loop.run_until_complete(
             es_search(
                 query,
-                k=k,
-                auxiliary_weight=self.config.auxiliary_weight,
-                query_key=self.full_key(self.config.index_field, self.config.main_key),
-                auxiliary_key=self.full_key(
-                    self.config.auxiliary_field, self.config.main_key
-                ),
-                filter_key=self.full_key(
-                    self.config.index_field, self.config.filter_key
-                ),
-                scale_auxiliary_weight_by_lengths=self.config.scale_auxiliary_weight_by_lengths,
-                index_name=self.index_name,
                 es_instance=self.instance,
+                es_search_fn_config=EsSearchFnConfig(
+                    k=k,
+                    index_name=self.index_name,
+                    auxiliary_weight=self.config.auxiliary_weight,
+                    query_key=self.full_key(self.config.index_field, self.config.main_key),
+                    auxiliary_key=self.full_key(
+                        self.config.auxiliary_field, self.config.main_key
+                    ),
+                    filter_key=self.full_key(
+                        self.config.index_field, self.config.filter_key
+                    ),
+                    scale_auxiliary_weight_by_lengths=self.config.scale_auxiliary_weight_by_lengths,
+                    output_keys=[self.config.es_index_key, "scores"],
+                ),
             )
         )
         scores = output["scores"]
@@ -277,7 +292,7 @@ class ElasticSearch(Search):
         return None
 
     def _search_chunk(
-        self, batch: Batch, idx: Optional[List[int]] = None, **kwargs
+            self, batch: Batch, idx: Optional[List[int]] = None, **kwargs
     ) -> SearchResult:
         search_result = self.search(batch, **kwargs)
         return search_result
@@ -287,7 +302,7 @@ class ElasticSearch(Search):
         ES instances cannot be properly pickled"""
         state = self.__dict__.copy()
         # Don't pickle the ES instances
-        for attr in ["_instance"]:
+        for attr in ["_instance", "_loop"]:
             if attr in state:
                 state[attr] = None
         return state
@@ -297,8 +312,19 @@ class ElasticSearch(Search):
         state["_instance"] = AsyncElasticsearch(timeout=state["config"].timeout)
         self.__dict__.update(state)
 
+    @property
+    def loop(self) -> asyncio.AbstractEventLoop:
+        """Return the event loop."""
+        if not hasattr(self, "_loop") or getattr(self, "_loop") is None:
+            self._loop = _init_loop()
+
+        return self._loop
+
     def __del__(self):
         if hasattr(self, "_instance") and isinstance(
-            self._instance, AsyncElasticsearch
+                self._instance, AsyncElasticsearch
         ):
-            asyncio.run(self._instance.close())
+            self.loop.run_until_complete(self._instance.close())
+        if hasattr(self, "_loop") and isinstance(self._loop, asyncio.AbstractEventLoop):
+            self._loop.close()
+            del self._loop
