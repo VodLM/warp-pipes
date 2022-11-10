@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import math
+import warnings
 from functools import partial
 from pathlib import Path
 from typing import Dict
@@ -12,7 +14,9 @@ from typing import Optional
 import omegaconf
 import pydantic
 from datasets import Dataset
+from elasticsearch import AsyncElasticsearch
 from elasticsearch import Elasticsearch
+from elasticsearch.exceptions import ElasticsearchWarning
 from loguru import logger
 from tqdm.auto import tqdm
 
@@ -23,10 +27,11 @@ from warp_pipes.search.search import Search
 from warp_pipes.search.search import SearchConfig
 from warp_pipes.support.datasets_utils import keep_only_columns
 from warp_pipes.support.datastruct import Batch
+from warp_pipes.support.elasticsearch import async_es_ingest
 from warp_pipes.support.elasticsearch import es_create_index
-from warp_pipes.support.elasticsearch import es_ingest
 from warp_pipes.support.elasticsearch import es_remove_index
 from warp_pipes.support.elasticsearch import es_search
+from warp_pipes.support.elasticsearch import EsSearchFnConfig
 from warp_pipes.support.tensor_handler import TensorLike
 
 
@@ -55,7 +60,6 @@ class ElasticSearchConfig(SearchConfig):
     main_key: str = "text"
     auxiliary_field: Optional[str] = "answer"
     filter_key: Optional[str] = None
-    ingest_batch_size: int = 1000
     auxiliary_weight: float = 0
     scale_auxiliary_weight_by_lengths: bool = True
     es_temperature: float = 1.0
@@ -122,27 +126,30 @@ class ElasticSearch(Search):
 
         # build the index
         if is_new_index:
-            batch_size = self.config.ingest_batch_size
-            try:
-                for i in tqdm(
-                    range(0, len(corpus), batch_size), desc="Ingesting ES index"
-                ):
-                    batch = corpus[i : i + batch_size]
-                    batch[self.config.es_index_key] = list(
-                        range(i, min(len(corpus), i + batch_size))
-                    )
 
-                    _ = es_ingest(
-                        batch,
+            async def yield_egs(corpus):
+                async for i in tqdm(range(len(corpus)), desc="Ingesting ES index"):
+                    eg = corpus[i]
+                    eg[self.config.es_index_key] = i
+                    yield eg
+
+            try:
+                async_instance = self.init_es_instance(asynch=True)
+                asyncio.run(
+                    async_es_ingest(
+                        yield_egs(corpus),
+                        es_instance=async_instance,
                         index_name=self.index_name,
-                        es_instance=self.instance,
                     )
+                )
+                self._close_instance(async_instance)
+                del async_instance
             except Exception as ex:
                 # clean up the index if something went wrong
                 es_remove_index(self.index_name, es_instance=self.instance)
                 raise ex
 
-    def _init_es_instance(self):
+    def init_es_instance(self, asynch=False):
         log_level = {
             "error": logging.ERROR,
             "warning": logging.WARNING,
@@ -150,7 +157,12 @@ class ElasticSearch(Search):
             "debug": logging.DEBUG,
         }[self.config.es_logging_level]
         logging.getLogger("elasticsearch").setLevel(log_level)
-        return Elasticsearch(timeout=self.config.timeout)
+        Cls = AsyncElasticsearch if asynch else Elasticsearch
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=ElasticsearchWarning)
+            instance = Cls(timeout=self.config.timeout)
+
+        return instance
 
     @property
     def special_attrs_file(self):
@@ -174,7 +186,7 @@ class ElasticSearch(Search):
     @property
     def instance(self):
         if not hasattr(self, "_instance") or self._instance is None:
-            self._instance = self._init_es_instance()
+            self._instance = self.init_es_instance()
         return self._instance
 
     def rm(self):
@@ -196,8 +208,17 @@ class ElasticSearch(Search):
     def free_memory(self):
         """Free the memory of the index."""
         if hasattr(self, "_instance") and self._instance is not None:
-            self.instance.close()
+            self._close_instance(self._instance)
             del self._instance
+
+    @staticmethod
+    def _close_instance(instance: Elasticsearch | AsyncElasticsearch):
+        if isinstance(instance, AsyncElasticsearch):
+            asyncio.run(instance.close())
+        elif isinstance(instance, Elasticsearch):
+            instance.close()
+        else:
+            raise TypeError(f"Unknown instance type: {type(instance)}")
 
     @property
     def is_up(self) -> bool:
@@ -223,16 +244,21 @@ class ElasticSearch(Search):
         # query Elastic Search
         output = es_search(
             query,
-            k=k,
-            auxiliary_weight=self.config.auxiliary_weight,
-            query_key=self.full_key(self.config.index_field, self.config.main_key),
-            auxiliary_key=self.full_key(
-                self.config.auxiliary_field, self.config.main_key
-            ),
-            filter_key=self.full_key(self.config.index_field, self.config.filter_key),
-            scale_auxiliary_weight_by_lengths=self.config.scale_auxiliary_weight_by_lengths,
-            index_name=self.index_name,
             es_instance=self.instance,
+            es_search_fn_config=EsSearchFnConfig(
+                k=k,
+                index_name=self.index_name,
+                auxiliary_weight=self.config.auxiliary_weight,
+                query_key=self.full_key(self.config.index_field, self.config.main_key),
+                auxiliary_key=self.full_key(
+                    self.config.auxiliary_field, self.config.main_key
+                ),
+                filter_key=self.full_key(
+                    self.config.index_field, self.config.filter_key
+                ),
+                scale_auxiliary_weight_by_lengths=self.config.scale_auxiliary_weight_by_lengths,
+                output_keys=[self.config.es_index_key, "scores"],
+            ),
         )
         scores = output["scores"]
         indices = output[self.config.es_index_key]
@@ -277,8 +303,8 @@ class ElasticSearch(Search):
         for attr in ["_instance"]:
             if attr in state:
                 instance = state.pop(attr)
-                if isinstance(instance, Elasticsearch):
-                    instance.close()
+                if isinstance(instance, (AsyncElasticsearch, Elasticsearch)):
+                    self._close_instance(instance)
                 del instance
         return state
 
@@ -287,4 +313,4 @@ class ElasticSearch(Search):
 
     def __del__(self):
         if hasattr(self, "_instance") and isinstance(self._instance, Elasticsearch):
-            self._instance.close()
+            self._close_instance(self._instance)

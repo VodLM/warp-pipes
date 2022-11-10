@@ -34,7 +34,7 @@ def run(cache_dir):
         shutil.rmtree(path)
 
     # make dataset with random strings and random vectors
-    n_pts = 3000
+    n_pts = 8000
     dim = 8
     vectors = np.random.randn(n_pts, dim).astype(np.float32)
     data = ["".join(np.random.choice(list(string.ascii_letters) + 10 * [" "], 10)
