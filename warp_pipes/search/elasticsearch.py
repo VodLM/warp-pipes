@@ -70,7 +70,7 @@ class ElasticSearchConfig(SearchConfig):
 
 class ElasticSearch(Search):
     # TODO: fix multiprocessings
-    _max_num_proc: int = 1
+    _max_num_proc: int = None
     _config_type = ElasticSearchConfig
 
     @property
@@ -111,9 +111,6 @@ class ElasticSearch(Search):
         self.index_name = self._get_index_name(corpus, self.config)
         self.corpus_size = len(corpus)
 
-        # instantiate the ElasticSearch instance
-        self._init_es_instance()
-
         # init the index
         is_new_index = es_create_index(
             self.index_name, body=self.config.es_body, es_instance=self.instance
@@ -153,7 +150,7 @@ class ElasticSearch(Search):
             "debug": logging.DEBUG,
         }[self.config.es_logging_level]
         logging.getLogger("elasticsearch").setLevel(log_level)
-        self._instance = Elasticsearch(timeout=self.config.timeout)
+        return Elasticsearch(timeout=self.config.timeout)
 
     @property
     def special_attrs_file(self):
@@ -164,7 +161,7 @@ class ElasticSearch(Search):
             attrs = json.load(f)
         self.index_name = attrs["index_name"]
         self.corpus_size = attrs["corpus_size"]
-        self._init_es_instance()
+        # self._init_es_instance()
 
     def _save_special_attrs(self, savedir: Path):
         attrs = {
@@ -176,6 +173,8 @@ class ElasticSearch(Search):
 
     @property
     def instance(self):
+        if not hasattr(self, "_instance") or self._instance is None:
+            self._instance = self._init_es_instance()
         return self._instance
 
     def rm(self):
@@ -196,14 +195,15 @@ class ElasticSearch(Search):
 
     def free_memory(self):
         """Free the memory of the index."""
-        pass
+        if hasattr(self, "_instance") and self._instance is not None:
+            self.instance.close()
+            del self._instance
 
     @property
     def is_up(self) -> bool:
         """Check if the index is up."""
         is_new_index = es_create_index(self.index_name, es_instance=self.instance)
-        instance_init = getattr(self, "_instance")
-        return instance_init is not None and not is_new_index
+        return not is_new_index
 
     def search(self, *query: Batch, k: int = None, **kwargs) -> SearchResult:
         """Search the index for a query and return the top-k results."""
@@ -272,16 +272,17 @@ class ElasticSearch(Search):
     def __getstate__(self):
         """this method is called when attempting pickling.
         ES instances cannot be properly pickled"""
-        state = self.__dict__.copy()
+        state = self.__dict__
         # Don't pickle the ES instances
         for attr in ["_instance"]:
             if attr in state:
-                state[attr] = None
+                instance = state.pop(attr)
+                if isinstance(instance, Elasticsearch):
+                    instance.close()
+                del instance
         return state
 
     def __setstate__(self, state):
-        state = state.copy()
-        state["_instance"] = Elasticsearch(timeout=state["config"].timeout)
         self.__dict__.update(state)
 
     def __del__(self):
