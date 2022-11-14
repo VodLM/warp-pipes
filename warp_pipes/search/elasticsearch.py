@@ -73,8 +73,7 @@ class ElasticSearchConfig(SearchConfig):
 
 
 class ElasticSearch(Search):
-    # TODO: fix multiprocessings
-    _max_num_proc: int = None
+    _max_num_proc: int = 4
     _config_type = ElasticSearchConfig
 
     @property
