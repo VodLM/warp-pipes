@@ -169,19 +169,17 @@ class ReplaceInKeys(Pipe):
 class RenameKeys(Pipe):
     """Rename a set of keys using a dictionary"""
 
-    _allows_update = False
-
     def __init__(self, keys: Dict[str, str], **kwargs):
         super().__init__(**kwargs)
         self.keys = keys
 
     def _call_batch(self, batch: Batch, **kwargs) -> Batch:
+        output = {}
         for old_key, new_key in self.keys.items():
             if old_key in batch:
-                value = batch.pop(old_key)
-                batch[new_key] = value
+                output[new_key] = batch[old_key]
 
-        return batch
+        return output
 
     @classmethod
     def instantiate_test(cls, **kwargs) -> "Pipe":
