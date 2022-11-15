@@ -26,6 +26,8 @@ def write_vectors(
         raise ValueError("idx must be provided")
 
     vectors = format_tensor(vectors, TensorFormat.NUMPY)
+    dtype = store.spec().dtype
+    vectors = vectors.astype(dtype.numpy_dtype)
 
     if asynch:
         store[idx].write(vectors)

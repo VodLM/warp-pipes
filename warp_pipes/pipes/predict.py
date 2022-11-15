@@ -54,6 +54,9 @@ class PredictWithoutCache(Pipe):
             batch = move_data_to_device(batch, device)
 
         model_output = self.model(batch, **kwargs)
+        for key, value in model_output.items():
+            if isinstance(value, torch.Tensor):
+                model_output[key] = value.cpu().numpy()
         return model_output
 
     @classmethod

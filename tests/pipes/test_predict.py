@@ -59,13 +59,13 @@ def collate_fn(egs, input_key="data", **kwargs):
             "output": dataset_preds,
             "call_kwargs": {"batch_size": 10, "num_proc": 1},
         },
-        # TODO: fix multiprocessing (hangs when using `ts.open(..).result()` in `PredictWithCache`)
-        # {
-        #     **base_cfg,
-        #     "input": dataset,
-        #     "output": dataset_preds,
-        #     "call_kwargs": {"batch_size": 10, "num_proc": 2},
-        # },
+        # # TODO: fix multiprocessing (hangs when using `ts.open(..).result()` in `PredictWithCache`)
+        # # {
+        # #     **base_cfg,
+        # #     "input": dataset,
+        # #     "output": dataset_preds,
+        # #     "call_kwargs": {"batch_size": 10, "num_proc": 2},
+        # # },
         {
             **base_cfg,
             "input": datasets.DatasetDict({"train": dataset}),
