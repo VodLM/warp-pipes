@@ -42,6 +42,29 @@ def _pad_to_length(lst: List, *, length: int, fill_token) -> List:
 
 
 class ElasticSearchConfig(SearchConfig):
+    """
+    Configuration for ElasticSearch.
+
+    Args:
+        es_index_key (:obj:`str`, defaults to :obj:`"__ROW_IDX__"`): name of the column
+            containing the row index in the dataset and automatically added to the index.
+        timeout (:obj:`int`, defaults to :obj:`180`): timeout for the search.
+        es_body (:obj:`dict`, defaults to :obj:`None`): Elasticsearch body of the search request.
+        main_key (:obj:`str`, defaults to :obj:`"text"`): key of the attribute to be indexed
+            and searched in the dataset.
+        filter_key (:obj:`str`, defaults to :obj:`None`): key of the attribute to be used
+            as a filter in the dataset. (e.g., "label" for a classification task)
+        auxiliary_field (:obj:`str`, defaults to :obj:`"answer"`): field name for the auxiliary
+            main_key. (e.g., setting `auxiliary_field="answer"` with `main_key="text"` will result
+            in using the attribute `"answer.text"` as auxiliary attribute)
+        auxiliary_weight (:obj:`float`, defaults to :obj:`0`): weight of the auxiliary query.
+        scale_auxiliary_weight (:obj:`bool`, defaults to :obj:`False`): whether to scale the
+            auxiliary query weight by the relative number of tokens betwen the query and
+            the auxiliary query.
+        es_temperature (:obj:`float`, defaults to :obj:`1.0`): temperature for the retrieval scores
+        es_logging_level (:obj:`str`, defaults to :obj:`"error"`): logging level for Elasticsearch
+    """
+
     _no_fingerprint: List[str] = SearchConfig._no_fingerprint + [
         "_instance",
         "timeout",
@@ -58,8 +81,8 @@ class ElasticSearchConfig(SearchConfig):
     timeout: Optional[int] = 180
     es_body: Optional[Dict] = None
     main_key: str = "text"
-    auxiliary_field: Optional[str] = "answer"
     filter_key: Optional[str] = None
+    auxiliary_field: Optional[str] = "answer"
     auxiliary_weight: float = 0
     scale_auxiliary_weight_by_lengths: bool = True
     es_temperature: float = 1.0
@@ -73,6 +96,12 @@ class ElasticSearchConfig(SearchConfig):
 
 
 class ElasticSearch(Search):
+    """
+    Search for documents in an ElasticSearch index.
+    The search parameters are configured in the `ElasicSearchConfig` object.
+    See the method `es_search()` for more details on the search configuration.
+    """
+
     _max_num_proc: int = 4
     _config_type = ElasticSearchConfig
 
@@ -227,6 +256,7 @@ class ElasticSearch(Search):
 
     def search(self, *query: Batch, k: int = None, **kwargs) -> SearchResult:
         """Search the index for a query and return the top-k results."""
+        AUXILIARY_KEY = "_auxiliary_key_"
         k = k or self.config.k
         rename_input_fields = RenameKeys(
             {
@@ -236,22 +266,24 @@ class ElasticSearch(Search):
             input_filter=In(self.query_columns),
         )
 
-        # unpack args and preprocess
+        # unpack args and preprocess and add the `AUXILIARY_KEY` to the batch
         query, *_ = query
-        query = rename_input_fields(query)
+        query_ = rename_input_fields(query)
+        if self.config.auxiliary_weight > 0:
+            query_[AUXILIARY_KEY] = query[
+                self.full_key(self.config.auxiliary_field, self.config.main_key)
+            ]
 
         # query Elastic Search
         output = es_search(
-            query,
+            query_,
             es_instance=self.instance,
             es_search_fn_config=EsSearchFnConfig(
                 k=k,
                 index_name=self.index_name,
                 auxiliary_weight=self.config.auxiliary_weight,
                 query_key=self.full_key(self.config.index_field, self.config.main_key),
-                auxiliary_key=self.full_key(
-                    self.config.auxiliary_field, self.config.main_key
-                ),
+                auxiliary_key=AUXILIARY_KEY,
                 filter_key=self.full_key(
                     self.config.index_field, self.config.filter_key
                 ),

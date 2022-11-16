@@ -74,8 +74,6 @@ def es_search(
     Search an Elasticsearch index based on the field `query_key` and, secondarily, `auxiliary_key`
     and `filter_key`.
 
-    TODO: async version
-
     Without filtering the ranking function is
     ```python
     r(batch, doc) = BM25(batch[query_key], doc[query_key]) + beta *

@@ -12,7 +12,6 @@ from typing import Tuple
 
 import numpy as np
 import omegaconf
-import rich
 import torch
 from datasets import Dataset
 from hydra.utils import instantiate
