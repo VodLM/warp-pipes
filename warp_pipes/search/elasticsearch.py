@@ -82,7 +82,7 @@ class ElasticSearchConfig(SearchConfig):
     es_body: Optional[Dict] = None
     main_key: str = "text"
     filter_key: Optional[str] = None
-    auxiliary_field: Optional[str] = "answer"
+    auxiliary_key: Optional[str] = "answer"
     auxiliary_weight: float = 0
     scale_auxiliary_weight_by_lengths: bool = True
     es_temperature: float = 1.0
@@ -107,7 +107,7 @@ class ElasticSearch(Search):
 
     @property
     def input_keys(self):
-        keys = [self.config.main_key, self.config.filter_key]
+        keys = [self.config.main_key, self.config.filter_key, self.config.auxiliary_key]
         keys = filter(None, keys)
         return list(keys)
 
@@ -118,10 +118,6 @@ class ElasticSearch(Search):
     @property
     def query_columns(self):
         columns = [self.full_key(self.config.query_field, k) for k in self.input_keys]
-        if self.config.auxiliary_field is not None:
-            columns.append(
-                self.full_key(self.config.auxiliary_field, self.config.main_key)
-            )
 
         return columns
 
@@ -256,7 +252,6 @@ class ElasticSearch(Search):
 
     def search(self, *query: Batch, k: int = None, **kwargs) -> SearchResult:
         """Search the index for a query and return the top-k results."""
-        AUXILIARY_KEY = "_auxiliary_key_"
         k = k or self.config.k
         rename_input_fields = RenameKeys(
             {
@@ -269,10 +264,6 @@ class ElasticSearch(Search):
         # unpack args and preprocess and add the `AUXILIARY_KEY` to the batch
         query, *_ = query
         query_ = rename_input_fields(query)
-        if self.config.auxiliary_weight > 0:
-            query_[AUXILIARY_KEY] = query[
-                self.full_key(self.config.auxiliary_field, self.config.main_key)
-            ]
 
         # query Elastic Search
         output = es_search(
@@ -283,7 +274,9 @@ class ElasticSearch(Search):
                 index_name=self.index_name,
                 auxiliary_weight=self.config.auxiliary_weight,
                 query_key=self.full_key(self.config.index_field, self.config.main_key),
-                auxiliary_key=AUXILIARY_KEY,
+                auxiliary_key=self.full_key(
+                    self.config.index_field, self.config.auxiliary_key
+                ),
                 filter_key=self.full_key(
                     self.config.index_field, self.config.filter_key
                 ),
