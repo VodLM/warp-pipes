@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
 
-from warp_pipes.support.shapes import infer_missing_dims, infer_shape_nested_list, infer_batch_shape
+from warp_pipes.support.shapes import infer_missing_dims, infer_shape_nested_list, \
+    infer_batch_shape, infer_nesting_level
 
 
 @pytest.mark.parametrize("inputs", [
@@ -43,3 +44,12 @@ def test_infer_shape_nested_list(values):
 def test_infer_batch_shape(inputs):
     batch, expected_shape =  inputs
     assert infer_batch_shape(batch) == expected_shape
+
+
+@pytest.mark.parametrize("batch,nesting_level", [
+    ({"a": [1, 2, 3]}, 0),
+    ({"b": [["abc", "def", "gh"], ["abc", "def", "gh"]]}, 1),
+    ({"a": [1, 2,], "b": [["abc", "def", "gh"], ["abc", "def", "gh"]]}, 0),
+])
+def test_infer_batch_shape(batch, nesting_level):
+    assert infer_nesting_level(batch) == nesting_level

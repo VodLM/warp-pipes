@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any
 from typing import Dict
 from typing import Iterable
@@ -25,7 +27,6 @@ from warp_pipes.pipes.nesting import ApplyAsFlatten
 from warp_pipes.pipes.pipelines import Gate
 from warp_pipes.pipes.pipelines import Parallel
 from warp_pipes.pipes.pipelines import Sequential
-from warp_pipes.pipes.pprint import PrintBatch
 from warp_pipes.support.datastruct import Batch
 from warp_pipes.support.datastruct import Eg
 
@@ -194,7 +195,7 @@ class CollateField(Gate):
         exclude: Optional[List[str]] = None,
         include_only: Optional[List[str]] = None,
         to_tensor: Optional[List[str]] = None,
-        nesting_level: int = 0,
+        nesting_level: int | List[str] = 0,
         **kwargs,
     ):
         # set defaults

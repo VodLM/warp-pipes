@@ -29,23 +29,31 @@ from warp_pipes.support.nesting import reconcat
 from warp_pipes.support.pretty import repr_batch
 from warp_pipes.support.shapes import infer_batch_shape
 from warp_pipes.support.shapes import infer_batch_size
+from warp_pipes.support.shapes import infer_nesting_level
 
 
 def fshp(shp):
     return str(shp).replace("]", ", ...]")
 
 
-class Flatten(ApplyToAll):
+class Flatten(Pipe):
     """Flatten a nested batch up to dimension=`level`.
     For instance a batch of shape (x, 3, 4, ...) with level=2 will be flattened to (x *3 * 4, ...)
     """
 
-    def __init__(self, level: int = 1, **kwargs):
-        if level < 1:
-            raise ValueError("level must be >= 1")
+    def __init__(self, level: Optional[int] = 1, **kwargs):
+        super(Flatten, self).__init__(**kwargs)
         self.level = level
-        fn = partial(flatten_nested, level=level)
-        super().__init__(fn, element_wise=False, **kwargs)
+
+    def _call_batch(
+        self,
+        batch: Batch,
+        idx: Optional[List[int]] = None,
+        level: Optional[int] = None,
+        **kwargs,
+    ) -> Batch:
+        level_ = self.level if level is None else level
+        return {k: flatten_nested(v, level=level_) for k, v in batch.items()}
 
     @classmethod
     def instantiate_test(cls, **kwargs) -> None:
@@ -133,55 +141,88 @@ class ApplyAsFlatten(Pipe):
     def __init__(
         self,
         pipe: Pipe,
-        level: int = 1,
+        level: int | List[str] = 1,
         flatten_idx: bool = True,
         flatten_as_dataset: bool = False,
+        input_filter: Optional[List[str]] = None,
         **kwargs,
     ):
-        super(ApplyAsFlatten, self).__init__(**kwargs)
+        if input_filter is not None:
+            raise NotImplementedError(
+                "`input_filter` cannot be set manually. "
+                "Set it in the `pipe` argument instead."
+            )
+        super(ApplyAsFlatten, self).__init__(input_filter=pipe.input_filter, **kwargs)
         self.pipe = pipe
         self.level = level
         self.flatten_idx = flatten_idx
         self.flatten_as_dataset = flatten_as_dataset
-        if level > 0:
-            self.flatten = Flatten(level=level)
+        self._skip_flatten = (level == 0) and not isinstance(level, list)
+        if not self._skip_flatten:
+            self.flatten = Flatten(level=None)
             self.nest = Nest(shape=None)
+        else:
+            self.flatten = self.nest = None
 
     def _call_batch(self, batch: Batch, **kwargs) -> Batch:
-        if self.level == 0:
+        if self._skip_flatten:
             return self.pipe(batch, **kwargs)
 
-        # infer the original shape of the batch
-        input_shape = infer_batch_shape(batch)[: self.flatten.level + 1]
+        # infer the flattening level
+        level = self._infer_flattening_level(batch)
 
-        batch = self.flatten(batch)
+        # infer the original shape of the batch
+        ref_shape = infer_batch_shape(batch)[: level + 1]
+
+        # flatten the batch
+        if level > 0 and self.flatten is not None:
+            batch = self.flatten(batch, level=level)
 
         # compute the new index
         if self.flatten_idx:
             idx = kwargs.get("idx", None)
             if idx is not None:
                 kwargs = kwargs.copy()
-                idx = nest_idx(idx, input_shape)
+                idx = nest_idx(idx, ref_shape)
                 kwargs["idx"] = idx
 
         # apply the batch to the flattened batch
         batch = self.pipe(batch, **kwargs)
-        # reshape back to the input_shape
-        output = self.nest(batch, shape=input_shape)
+
+        # reshape back to the ref_shape
+        if level > 0 and self.flatten is not None:
+            output = self.nest(batch, shape=ref_shape)
+        else:
+            output = batch
 
         # check output and return
         new_shape = infer_batch_shape(output)
-        new_shape = new_shape[: self.flatten.level + 1]
+        new_shape = new_shape[: level + 1]
         explain = (
             "Applying a pipe that changes the batch size might have caused this issue."
         )
-        if new_shape != input_shape:
+        if new_shape != ref_shape:
             raise ValueError(
-                f"{new_shape} != {input_shape}. Level={self.flatten.level}. "
+                f"{new_shape} != {ref_shape}. Level={level}. "
                 f"{explain}\n"
                 f"{repr_batch(batch, header='ApplyAsFlatten output batch')}"
             )
         return output
+
+    def _infer_flattening_level(self, batch):
+        if isinstance(self.level, int):
+            level = self.level
+        elif isinstance(self.level, list):
+            if not set.intersection(set(self.level), set(batch.keys())):
+                raise ValueError(
+                    f"Reference columns `{self.level}` not found in batch "
+                    f"with keys: {batch.keys()}"
+                )
+            ref_batch = {k: v for k, v in batch.items() if k in self.level}
+            level = infer_nesting_level(ref_batch)
+        else:
+            raise TypeError(f"Unsupported type for level: {type(self.level)}")
+        return level
 
     def _call_dataset_dict(self, dataset: DatasetDict, **kwargs) -> DatasetDict:
         return self._call_dataset_any(dataset, **kwargs)
@@ -194,7 +235,7 @@ class ApplyAsFlatten(Pipe):
         return self._call_dataset_any(dataset, **kwargs)
 
     def _call_dataset_any(self, dataset: HfDataset, **kwargs) -> HfDataset:
-        if not self.flatten_as_dataset or self.level == 0:
+        if not self.flatten_as_dataset or self._skip_flatten:
             if isinstance(dataset, Dataset):
                 return super()._call_dataset(dataset, **kwargs)
             elif isinstance(dataset, DatasetDict):
@@ -211,17 +252,20 @@ class ApplyAsFlatten(Pipe):
             desc = kwargs.pop("desc", type(self).__name__)
             batch_size = kwargs.pop("batch_size", 10)
             batch_eg = self._get_batch_example(batch_size, new_dataset)
+            level = self._infer_flattening_level(batch_eg)
             input_full_shape = infer_batch_shape(batch_eg)
             input_full_shape[0] = -1
-            input_shape = input_full_shape[: self.flatten.level + 1]
-            flatten_batch_size = batch_size * math.prod(input_shape[1:])
-            flat_shape = [-1, *input_full_shape[len(input_shape) :]]
-            new_dataset = self.flatten(
-                new_dataset,
-                **kwargs,
-                batch_size=batch_size,
-                desc=f"{desc}: {fshp(input_full_shape)} -> {fshp(flat_shape)}",
-            )
+            ref_shape = input_full_shape[: level + 1]
+            flatten_batch_size = batch_size * math.prod(ref_shape[1:])
+            flat_shape = [-1, *input_full_shape[len(ref_shape) :]]
+            if level > 0:
+                new_dataset = self.flatten(
+                    new_dataset,
+                    **kwargs,
+                    level=level,
+                    batch_size=batch_size,
+                    desc=f"{desc}: {fshp(input_full_shape)} -> {fshp(flat_shape)}",
+                )
 
             # transform the dataset
             new_dataset = self.pipe(
@@ -234,13 +278,14 @@ class ApplyAsFlatten(Pipe):
             # re-shape
             # NB: `num_proc=1` : avoid splitting a single example across multiple workers
             kwargs = {**kwargs, "num_proc": 1}
-            new_dataset = self.nest(
-                new_dataset,
-                **kwargs,
-                batch_size=flatten_batch_size,
-                desc=f"{desc}: {fshp(flat_shape)} -> {fshp(input_full_shape)}",
-                shape=input_shape,
-            )
+            if level > 0:
+                new_dataset = self.nest(
+                    new_dataset,
+                    **kwargs,
+                    batch_size=flatten_batch_size,
+                    desc=f"{desc}: {fshp(flat_shape)} -> {fshp(input_full_shape)}",
+                    shape=ref_shape,
+                )
 
             # update the dataset
             if self.update:

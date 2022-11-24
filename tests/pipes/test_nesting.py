@@ -14,7 +14,9 @@ from warp_pipes.support.datastruct import Batch
 # todo: mixed types: list | np.array | Tensor
 @pytest.mark.parametrize("inputs", [
     ({'document.text': [['a', 'b', 'c'], ['d', 'e', 'f']], 'question': [1, 2]}, 1),
-    ({'document.text': [[['a', 'b', 'c'], ['d', 'e', 'f']]], 'question': [[1, 2]]}, 2)
+    ({'document.text': [[['a', 'b', 'c'], ['d', 'e', 'f']]], 'question': [[1, 2]]}, 2),
+    ({'document.text': [['a', 'b', 'c'], ['d', 'e', 'f']], 'question': [1, 2]}, ['document.text']),
+
 ])
 def test_AsFlatten_identity(inputs):
     """This process a batch using the Idenity on nested fields"""
