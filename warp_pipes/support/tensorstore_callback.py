@@ -9,6 +9,8 @@ import torch
 from pytorch_lightning import Callback
 
 from warp_pipes.support.datastruct import Batch
+from warp_pipes.support.tensor_handler import format_tensor
+from warp_pipes.support.tensor_handler import TensorFormat
 
 IDX_COL = "__idx__"
 
@@ -22,6 +24,10 @@ def write_vectors(
     """write a table to file."""
     if idx is None:
         raise ValueError("idx must be provided")
+
+    vectors = format_tensor(vectors, TensorFormat.NUMPY)
+    dtype = store.spec().dtype
+    vectors = vectors.astype(dtype.numpy_dtype)
 
     if asynch:
         store[idx].write(vectors)
@@ -37,6 +43,8 @@ def select_key_from_output(batch: Batch, key: Optional[str] = None) -> torch.Ten
             )
         return batch
 
+    if key not in batch:
+        raise ValueError(f"Key {key} not found in batch. Found {batch.keys()}")
     return batch[key]
 
 

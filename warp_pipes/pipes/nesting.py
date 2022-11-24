@@ -1,18 +1,25 @@
 from __future__ import annotations
 
+import math
 from functools import partial
 from typing import Callable
 from typing import List
 from typing import Optional
 from typing import T
-from typing import Union
 
 import numpy as np
+from datasets import Dataset
+from datasets import DatasetDict
 from torch import Tensor
 
 from warp_pipes.core.pipe import Pipe
 from warp_pipes.pipes.basics import ApplyToAll
 from warp_pipes.pipes.basics import Identity
+from warp_pipes.support.datasets_utils import concatenate_datasets
+from warp_pipes.support.datasets_utils import get_column_names
+from warp_pipes.support.datasets_utils import HfDataset
+from warp_pipes.support.datasets_utils import keep_only_columns
+from warp_pipes.support.datasets_utils import remove_columns
 from warp_pipes.support.datastruct import Batch
 from warp_pipes.support.nesting import expand_and_repeat
 from warp_pipes.support.nesting import flatten_nested
@@ -22,6 +29,10 @@ from warp_pipes.support.nesting import reconcat
 from warp_pipes.support.pretty import repr_batch
 from warp_pipes.support.shapes import infer_batch_shape
 from warp_pipes.support.shapes import infer_batch_size
+
+
+def fshp(shp):
+    return str(shp).replace("]", ", ...]")
 
 
 class Flatten(ApplyToAll):
@@ -124,12 +135,14 @@ class ApplyAsFlatten(Pipe):
         pipe: Pipe,
         level: int = 1,
         flatten_idx: bool = True,
+        flatten_as_dataset: bool = False,
         **kwargs,
     ):
         super(ApplyAsFlatten, self).__init__(**kwargs)
         self.pipe = pipe
         self.level = level
         self.flatten_idx = flatten_idx
+        self.flatten_as_dataset = flatten_as_dataset
         if level > 0:
             self.flatten = Flatten(level=level)
             self.nest = Nest(shape=None)
@@ -169,6 +182,82 @@ class ApplyAsFlatten(Pipe):
                 f"{repr_batch(batch, header='ApplyAsFlatten output batch')}"
             )
         return output
+
+    def _call_dataset_dict(self, dataset: DatasetDict, **kwargs) -> DatasetDict:
+        return self._call_dataset_any(dataset, **kwargs)
+
+    def _call_dataset(
+        self,
+        dataset: Dataset,
+        **kwargs,
+    ) -> Dataset:
+        return self._call_dataset_any(dataset, **kwargs)
+
+    def _call_dataset_any(self, dataset: HfDataset, **kwargs) -> HfDataset:
+        if not self.flatten_as_dataset or self.level == 0:
+            if isinstance(dataset, Dataset):
+                return super()._call_dataset(dataset, **kwargs)
+            elif isinstance(dataset, DatasetDict):
+                return super()._call_dataset_dict(dataset, **kwargs)
+            else:
+                raise TypeError(f"Unsupported type: {type(dataset)}")
+        else:
+            # filter the dataset
+            if self.input_filter is not None:
+                new_dataset = keep_only_columns(dataset, self.input_filter)
+            else:
+                new_dataset = dataset
+
+            desc = kwargs.pop("desc", type(self).__name__)
+            batch_size = kwargs.pop("batch_size", 10)
+            batch_eg = self._get_batch_example(batch_size, new_dataset)
+            input_full_shape = infer_batch_shape(batch_eg)
+            input_full_shape[0] = -1
+            input_shape = input_full_shape[: self.flatten.level + 1]
+            flatten_batch_size = batch_size * math.prod(input_shape[1:])
+            flat_shape = [-1, *input_full_shape[len(input_shape) :]]
+            new_dataset = self.flatten(
+                new_dataset,
+                **kwargs,
+                batch_size=batch_size,
+                desc=f"{desc}: {fshp(input_full_shape)} -> {fshp(flat_shape)}",
+            )
+
+            # transform the dataset
+            new_dataset = self.pipe(
+                new_dataset,
+                **kwargs,
+                batch_size=flatten_batch_size,
+                desc=f"{desc}",
+            )
+
+            # re-shape
+            # NB: `num_proc=1` : avoid splitting a single example across multiple workers
+            kwargs = {**kwargs, "num_proc": 1}
+            new_dataset = self.nest(
+                new_dataset,
+                **kwargs,
+                batch_size=flatten_batch_size,
+                desc=f"{desc}: {fshp(flat_shape)} -> {fshp(input_full_shape)}",
+                shape=input_shape,
+            )
+
+            # update the dataset
+            if self.update:
+                cols = get_column_names(dataset)
+                cols_to_remove = [c for c in get_column_names(new_dataset) if c in cols]
+                missing_columns = remove_columns(dataset, cols_to_remove)
+                new_dataset = concatenate_datasets(
+                    [missing_columns, new_dataset], axis=1
+                )
+
+            return new_dataset
+
+    def _get_batch_example(self, batch_size, dataset):
+        if isinstance(dataset, DatasetDict):
+            dataset = next(iter(dataset.values()))
+        batch_eg = dataset[:batch_size]
+        return batch_eg
 
     @classmethod
     def instantiate_test(cls, **kwargs) -> None:

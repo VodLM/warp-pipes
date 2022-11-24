@@ -3,7 +3,7 @@ from collections import defaultdict
 import pytest
 import math
 import torch
-from warp_pipes.support.search_engines.search_result import SearchResult, sum_scores
+from warp_pipes.search.result import sum_scores
 
 
 def index_score_to_dicts(indices: torch.Tensor, scores: torch.Tensor) -> List[Dict]:

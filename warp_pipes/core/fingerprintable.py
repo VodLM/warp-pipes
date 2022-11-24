@@ -146,12 +146,8 @@ class Fingerprintable(object):
         """
         data = self.to_json_struct(exclude_non_fingerprintable=True)
 
-        def maybe_get_fingerprint(v: Any, key: str) -> str:
+        def maybe_get_fingerprint(v: Any, key: str = None) -> str:
             if key == "__name__":
-                return v
-            elif isinstance(v, Number):
-                return str(v)
-            elif isinstance(v, str) and len(v) < 32:
                 return v
             else:
                 return get_fingerprint(v)

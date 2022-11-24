@@ -4,7 +4,7 @@ from typing import Dict
 import numpy as np
 import pytest
 
-from warp_pipes.support.search_engines.dense import DenseSearchEngineConfig, DenseSearchEngine
+from warp_pipes.search.dense import DenseSearchConfig, DenseSearch
 
 n_pts = 1000
 dim = 8
@@ -18,8 +18,8 @@ vectors = np.random.randn(n_pts, dim).astype(np.float32)
 def test_dense_search_engine(cfg: Dict, tmp_path: Path):
     tmp_path = tmp_path / "test-index"
     cfg['path'] = tmp_path
-    cfg = DenseSearchEngineConfig(**cfg)
-    engine = DenseSearchEngine(path=tmp_path, config=cfg)
+    cfg = DenseSearchConfig(**cfg)
+    engine = DenseSearch(path=tmp_path, config=cfg)
     engine.build(corpus=None, vectors=vectors)
 
     # process a query vector using the `search` interface

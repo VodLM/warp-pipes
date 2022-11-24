@@ -34,10 +34,10 @@ def run(cache_dir):
         shutil.rmtree(path)
 
     # make dataset with random strings and random vectors
-    n_pts = 1000
+    n_pts = 8000
     dim = 8
     vectors = np.random.randn(n_pts, dim).astype(np.float32)
-    data = ["".join(np.random.choice(list(string.ascii_letters), 10)
+    data = ["".join(np.random.choice(list(string.ascii_letters) + 10 * [" "], 10)
                     .tolist()) for _ in range(n_pts)]
     dataset = datasets.Dataset.from_dict(
         {"document.text": data,

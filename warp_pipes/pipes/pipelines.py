@@ -13,6 +13,7 @@ from warp_pipes.core.condition import HasPrefix
 from warp_pipes.core.condition import Static
 from warp_pipes.core.pipe import Pipe
 from warp_pipes.pipes.basics import Identity
+from warp_pipes.pipes.pprint import PrintBatch
 from warp_pipes.support.datastruct import Batch
 from warp_pipes.support.functional import check_equal_arrays
 from warp_pipes.support.pretty import repr_batch
@@ -30,8 +31,9 @@ class PipeProcessError(Exception):
 
         keys = _infer_keys(batch)
         kwargs = {k: type(v) for k, v in kwargs.items()}
+        id_str = f"( id={pipe.id})" if pipe.id else ""
         msg = (
-            f"Exception thrown by pipe: {type(pipe)} in Pipeline {type(pipeline)} with "
+            f"Exception thrown by pipe: {type(pipe)}{id_str} in Pipeline {type(pipeline)} with "
             f"batch of type {type(batch)} with keys={keys} "
             f"and kwargs={kwargs}. Batch=\n{batch_repr}"
         )
@@ -197,17 +199,22 @@ class Gate(Pipeline):
 class BlockSequential(Pipeline):
     """A sequence of Pipes organized into blocks"""
 
-    def __init__(self, blocks: List[Tuple[str, Pipe]], **kwargs):
+    def __init__(self, blocks: List[Tuple[str, Pipe]], pprint: bool = False, **kwargs):
         super(BlockSequential, self).__init__(**kwargs)
         blocks = [(k, b) for k, b in blocks if b is not None]
         self.blocks: OrderedDict[str, Pipe] = OrderedDict(blocks)
+        self.pprint = pprint
 
     def _call_all_types(self, batch: Union[List[Batch], Batch], **kwargs) -> Batch:
         """Call the pipes sequentially."""
-        for block in self.blocks.values():
+        for name, block in self.blocks.items():
+            if self.pprint:
+                PrintBatch(f"{name}::input")(batch)
             batch = _call_pipe_and_handle_exception(
                 block, batch, **kwargs, pipeline=self
             )
+            if self.pprint:
+                PrintBatch(f"{name}::output")(batch)
 
         return batch
 

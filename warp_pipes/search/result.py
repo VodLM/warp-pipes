@@ -139,13 +139,14 @@ def masked_fill(
         raise TypeError(f"Unsupported type: {type(arr)}")
 
 
-def concat_tensors(*a: TensorLike, dim=0) -> TensorLike:
+def concat_tensors(a: List[TensorLike], dim=0) -> TensorLike:
     """Concatenate tensors along a given dimension."""
-    arr_type = type(a[0])
-    assert all(isinstance(x, arr_type) for x in a)
-    if arr_type == np.ndarray:
+    arr_types = [type(b) for b in a]
+    if not all(arr_types[0] == b for b in arr_types):
+        raise TypeError(f"Incompatible types: {arr_types}")
+    if arr_types[0] == np.ndarray:
         return np.concatenate(a, axis=dim)
-    elif arr_type == Tensor:
+    elif arr_types[0] == Tensor:
         return torch.cat(a, dim=dim)
     else:
         raise TypeError(f"Unsupported type: {type(a[0])}")
@@ -170,9 +171,6 @@ class SearchResult:
         self.scores = formatter(scores)
         self.indices = formatter(indices)
 
-        self.scores = formatter(self.scores)
-        self.indices = formatter(self.indices)
-
         # check shapes
         assert self.scores.shape == self.indices.shape
         assert len(self.scores.shape) == 2
@@ -181,16 +179,16 @@ class SearchResult:
         scores_shape = self.scores.shape
         indices_shape = self.indices.shape
         return (
-            f"{type(self).__name__}(scores={scores_shape}, "
-            f"indices={indices_shape}, "
+            f"{type(self).__name__}(scores={scores_shape} ({type(self.scores)}), "
+            f"indices={indices_shape} ({type(self.indices)}), "
             f"format={self.format})"
         )
 
     def to(self, format: Optional[TensorFormat] = None) -> "SearchResult":
         formatter = TensorHandler(format)
-        self.indices = formatter(self.indices)
-        self.scores = formatter(self.scores)
-        return self
+        new_indices = formatter(self.indices)
+        new_scores = formatter(self.scores)
+        return self.copy(scores=new_scores, indices=new_indices, format=format)
 
     def copy(self, **new_attrs) -> "SearchResult":
         new_instance = copy(self)
@@ -217,6 +215,7 @@ class SearchResult:
         other = other.to(format=TensorFormat.TORCH)
 
         # take the minimum scores (except for `inf` values) and offset the scores
+        # TODO: potentially remove this, or at least leave it to the use to configure it
         min_scores_self = self._get_real_min(self.scores)
         self.scores = self.scores - min_scores_self[:, None]
         min_scores_other = self._get_real_min(other.scores)
@@ -271,6 +270,12 @@ class SearchResult:
         )
         return self.copy(indices=new_indices).to(format=self.format)
 
+    def append(self, other: "SearchResult") -> "SearchResult":
+        other = other.to(format=self.format)
+        new_indices = concat_tensors([self.indices, other.indices], dim=0)
+        new_scores = concat_tensors([self.scores, other.scores], dim=0)
+        return self.copy(indices=new_indices, scores=new_scores)
+
 
 def sum_scores(
     a: Tuple[Tensor, Tensor], b: Tuple[Tensor, Tensor], fill_token_value=-1
@@ -291,6 +296,8 @@ def sum_scores(
     assert a_indices.shape == a_scores.shape
     b_indices, b_scores = b
     assert b_indices.shape == b_scores.shape
+    b_indices = b_indices.to(a_indices.device)
+    b_scores = b_scores.to(a_scores.device)
 
     # infer the new indices
     all_indices = torch.cat([a_indices, b_indices], dim=1)
@@ -302,13 +309,15 @@ def sum_scores(
 
     # set the new indices
     new_indices = fill_token_value + torch.zeros(
-        (len(all_indices), new_size), dtype=torch.long
+        (len(all_indices), new_size), dtype=all_indices.dtype, device=all_indices.device
     )
     new_indices.scatter_(1, unique_inv, all_indices)
 
     # set the new scores
     all_scores = torch.cat([a_scores, b_scores], dim=1)
-    new_scores = torch.zeros_like(new_indices, dtype=a_scores.dtype)
+    new_scores = torch.zeros(
+        new_indices.shape, dtype=all_scores.dtype, device=all_scores.device
+    )
     new_scores.scatter_add_(1, unique_inv, all_scores)
     new_scores[new_indices == -1] = -math.inf
 

@@ -10,7 +10,7 @@ import numpy as np
 import rich
 import torch
 
-from warp_pipes.support.search_engines.dense import DenseSearchEngine
+from warp_pipes.search.dense import DenseSearch
 
 
 def run(cache_dir):
@@ -26,7 +26,7 @@ def run(cache_dir):
                     .tolist()) for _ in range(n_pts)]
     dataset = datasets.Dataset.from_dict({"text": data})
 
-    engine = DenseSearchEngine(
+    engine = DenseSearch(
         path=path,
         config={'k': 3, "index_factory": "IVF1,Flat", "shard": False})
     engine.build(vectors=vectors, corpus=dataset)

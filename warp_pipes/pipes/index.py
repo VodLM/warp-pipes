@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import TypeVar
 
+import omegaconf
 import pytorch_lightning as pl
 from datasets import Dataset
 from datasets import DatasetDict
@@ -18,15 +18,14 @@ from torch import nn
 
 from warp_pipes.core.pipe import Pipe
 from warp_pipes.pipes import predict
+from warp_pipes.search import AutoSearchEngine
+from warp_pipes.search import Search
+from warp_pipes.search.auto import AutoSearchConfig
 from warp_pipes.support import caching
+from warp_pipes.support.datasets_utils import HfDataset
 from warp_pipes.support.datastruct import Batch
-from warp_pipes.support.search_engines import AutoSearchEngine
-from warp_pipes.support.search_engines import SearchEngine
 from warp_pipes.support.shapes import infer_batch_shape
 
-HfDataset = TypeVar("HfDataset", Dataset, DatasetDict)
-
-MAX_INDEX_CACHE_AGE = 60 * 60 * 24 * 3  # 3 days
 TEMPDIR_SUFFIX = "-tempdir"
 
 
@@ -39,8 +38,6 @@ def _get_unique(x: List):
 class Index(Pipe):
     """Keep an index of a Dataset and search it using queries."""
 
-    index_name: Optional[str] = None
-    is_indexed: bool = False
     default_key: Optional[str | List[str]] = None
     _no_fingerprint: List[str] = [
         "cache_dir",
@@ -53,7 +50,7 @@ class Index(Pipe):
         corpus: Dataset,
         *,
         cache_dir: os.PathLike = None,
-        engines: List[SearchEngine | Dict] = None,
+        engines: List[Search | Dict] = None,
         model: pl.LightningModule | nn.Module = None,
         index_cache_config: Dict | caching.CacheConfig,
         query_cache_config: Dict | caching.CacheConfig,
@@ -70,17 +67,30 @@ class Index(Pipe):
         # register the Engines
         if isinstance(engines, (dict, DictConfig)):
             assert all(isinstance(cfg, (dict, DictConfig)) for cfg in engines.values())
-            engines = [{**{"name": k}, **v} for k, v in engines.items()]
+            engines = [v for k, v in engines.items()]
 
         self.engines_config = copy(engines)
         self.engines = []
         for engine in engines:
-            engine_path = cache_dir / engine["name"]
-            if isinstance(engine, dict):
-                engine = AutoSearchEngine(
-                    name=engine["name"], path=engine_path, config=engine["config"]
+            if isinstance(engine, (dict, DictConfig)):
+                engine_config = AutoSearchConfig(
+                    name=engine["name"], config=engine["config"]
                 )
-            elif isinstance(engine, SearchEngine):
+            elif isinstance(engine, Search):
+                engine_config = engine.config
+            else:
+                raise ValueError(
+                    f"Unknown engine type: {type(engine)} (accepted: dict, Search)"
+                )
+
+            # set the engine path
+            engine_path = cache_dir / f"search-{engine_config.fingerprint}"
+
+            if isinstance(engine, (dict, DictConfig)):
+                engine = AutoSearchEngine(
+                    name=engine["name"], path=engine_path, config=engine_config
+                )
+            elif isinstance(engine, Search):
                 if engine.path != engine_path:
                     logger.warning(
                         f"Overriding engine path {engine.path} "
@@ -113,7 +123,7 @@ class Index(Pipe):
         # build the engines and save them to disk
         self.build_engines(corpus)
 
-    def _validate_engines(self, engines: List[SearchEngine]):
+    def _validate_engines(self, engines: List[Search]):
         if len(engines) == 0:
             raise ValueError("No engines were registered, engine list is empty.")
 
@@ -191,6 +201,12 @@ class Index(Pipe):
             vectors = None if isinstance(dataset, Dataset) else {}
 
         # process the dataset with the Engines
+        kwargs["set_new_fingerprint"] = True
+        kwargs["print_fringerprint_dict"] = False
+        if "desc" in kwargs:
+            desc_ = f': {kwargs.pop("desc")}'
+        else:
+            desc_ = ""
         for engine in self.engines:
             if isinstance(dataset, DatasetDict):
                 dataset = DatasetDict(
@@ -200,7 +216,7 @@ class Index(Pipe):
                             vectors=vectors.get(split, None)
                             if engine.require_vectors
                             else None,
-                            desc=f"{type(engine).__name__} ({split})",
+                            desc=f"{type(engine).__name__} ({split}){desc_}",
                             **kwargs,
                         )
                         for split, dset in dataset.items()
@@ -210,7 +226,7 @@ class Index(Pipe):
                 dataset = engine(
                     dataset,
                     vectors=vectors if engine.require_vectors else None,
-                    desc=f"{type(engine).__name__}",
+                    desc=f"{type(engine).__name__}{desc_}",
                     **kwargs,
                 )
             else:
@@ -222,10 +238,12 @@ class Index(Pipe):
         return dataset
 
     def __repr__(self):
-        return f"{type(self).__name__}(engines={self.engines_config})"
+        return (
+            f"{type(self).__name__}(engines={[type(e).__name__ for e in self.engines]})"
+        )
 
     @classmethod
-    def instantiate_test(cls, cache_dir: Path, **kwargs) -> "SearchEngine":
+    def instantiate_test(cls, cache_dir: Path, **kwargs) -> "Search":
         # TODO: test this
         return None
 

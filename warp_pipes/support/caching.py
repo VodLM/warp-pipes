@@ -113,7 +113,7 @@ def cache_or_load_vectors(
     dataset: Dataset,
     model: Callable | nn.Module | LightningModule,
     *,
-    cache_dir=Path,
+    cache_dir: Path,
     config: Dict | CacheConfig,
 ) -> ts.TensorStore:
     """Process a `Dataset` using a model and cache the results into a `TensorStore`. If the cache

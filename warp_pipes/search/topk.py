@@ -10,15 +10,15 @@ import torch  # type: ignore
 from datasets import Dataset
 from loguru import logger
 
+from warp_pipes.search.result import SearchResult
+from warp_pipes.search.search import Search
 from warp_pipes.support.datastruct import Batch
-from warp_pipes.support.search_engines.base import SearchEngine
-from warp_pipes.support.search_engines.search_result import SearchResult
 from warp_pipes.support.tensor_handler import TensorFormat
 from warp_pipes.support.tensor_handler import TensorHandler
 from warp_pipes.support.tensor_handler import TensorLike
 
 
-class TopkSearchEngine(SearchEngine):
+class TopkSearch(Search):
     _max_num_proc: int = None
     require_vectors: bool = False
 
@@ -32,7 +32,7 @@ class TopkSearchEngine(SearchEngine):
         if self.config.merge_previous_results:
             logger.warning(
                 "merge_previous_results is set to True, "
-                "but MaxSimEngine is a re-ranker: setting "
+                "but TopkSearch is a re-ranker: setting "
                 "merge_previous_results to False"
             )
             self.config.merge_previous_results = False
@@ -67,6 +67,7 @@ class TopkSearchEngine(SearchEngine):
         idx = torch.argsort(scores, descending=True, dim=1)[:, :k]
         scores = scores.gather(1, index=idx)
         pids = pids.gather(1, index=idx)
+
         return scores, pids
 
     def _search_chunk(

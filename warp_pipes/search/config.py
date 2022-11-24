@@ -11,11 +11,13 @@ from warp_pipes.core.fingerprintable import Fingerprintable
 from warp_pipes.support.fingerprint import get_fingerprint
 
 
-class SearchConfig(pydantic.BaseModel, Fingerprintable):
+class FingerprintableConfig(pydantic.BaseModel, Fingerprintable):
     """Base class for search engine configuration."""
 
     _no_fingerprint: List[str] = Fingerprintable._no_fingerprint + [
-        "no_index_fingerprint"
+        "no_index_fingerprint",
+        "__private_attribute_values__",
+        "__fields_set__",
     ]
     _no_index_fingerprint: List[str] = []
 

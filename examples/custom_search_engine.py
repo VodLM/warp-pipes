@@ -14,12 +14,12 @@ import torch
 from datasets import Dataset
 
 from warp_pipes.support.datastruct import Batch
-from warp_pipes.support.search_engines.base import SearchEngine
-from warp_pipes.support.search_engines.search_result import SearchResult
+from warp_pipes.search import Search
+from warp_pipes.search.result import SearchResult
 from warp_pipes.support.tensor_handler import TensorFormat, TensorLike, TensorHandler
 
 
-class CustomEngine(SearchEngine):
+class Custom(Search):
 
     def _build(self, vectors: Optional[TensorLike] = None,
                corpus: Optional[Dataset] = None, **kwargs):
@@ -74,7 +74,7 @@ def run(cache_dir):
     path = Path(cache_dir)
     if path.exists():
         shutil.rmtree(path)
-    engine = CustomEngine(path=path, config={'k': 3})
+    engine = Custom(path=path, config={'k': 3})
     engine.build(vectors=vectors, corpus=dataset)
 
     # `search` interface

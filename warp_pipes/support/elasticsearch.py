@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import asyncio
+import functools
 import math
 import os
 import string
@@ -5,32 +9,66 @@ import subprocess
 import time
 from collections import defaultdict
 from copy import copy
+from typing import AsyncIterator
 from typing import Dict
+from typing import Iterable
 from typing import List
 from typing import Optional
 
 import torch
+from elasticsearch import AsyncElasticsearch
 from elasticsearch import Elasticsearch
 from elasticsearch import helpers as es_helpers
 from elasticsearch import RequestError
 from loguru import logger
+from pydantic import BaseModel
 
 from warp_pipes.support.datastruct import Batch
+from warp_pipes.support.datastruct import Eg
 from warp_pipes.support.functional import iter_batch_egs
+
+
+def compose_two_fns(f, g):
+    return lambda *a, **kw: f(g(*a, **kw))
+
+
+def compose_fns(*fs):
+    return functools.reduce(compose_two_fns, fs)
+
+
+class EsSearchFnConfig(BaseModel):
+    """
+    Args:
+        query_key (:obj:`str`): name of the elasticsearch field to query and name of the key in the
+            batch
+        auxiliary_key (:obj:`str`): name of the batch field used to query the main elasticsearch
+            field (`query_key`)
+        filter_key (:obj:`str`): name of the field used for filtering
+        auxiliary_weight (:obj:`float`): value of the weight (beta)
+        scale_auxiliary_weight_by_lengths (:obj:`bool`): scale the auxiliary weight by the ratio
+            of the lengths `query`  / `aux_query`
+        k (:obj:`int`): number of results
+        index_name (:obj:`str`): name of the elasticsearch index
+        output_keys (:obj:`List[str]`): list of keys to return from ES (limit I/O)
+    """
+
+    k: int
+    index_name: str
+    query_key: str
+    auxiliary_key: Optional[str] = None
+    filter_key: Optional[str] = None
+    auxiliary_weight: float = 0
+    scale_auxiliary_weight_by_lengths: bool = False
+    output_keys: Optional[List[str]] = None
 
 
 def es_search(
     batch: Batch,
     *,
-    es_instance: Elasticsearch,
-    index_name: str,
-    query_key: str,
-    auxiliary_key: Optional[str] = None,
-    filter_key: Optional[str] = None,
-    auxiliary_weight: float = 0,
-    scale_auxiliary_weight_by_lengths: bool = False,
-    k: int = 10,
+    es_instance: Elasticsearch | AsyncElasticsearch,
+    es_search_fn_config: EsSearchFnConfig,
     request_timeout: int = 600,
+    chunk_size: Optional[int] = None,
 ) -> Batch:
     """
     Search an Elasticsearch index based on the field `query_key` and, secondarily, `auxiliary_key`
@@ -38,7 +76,6 @@ def es_search(
 
     Without filtering the ranking function is
     ```python
-
     r(batch, doc) = BM25(batch[query_key], doc[query_key]) + beta *
         BM25(batch[auxiliary_query_key], doc)[query_key]
     ```
@@ -50,117 +87,161 @@ def es_search(
     beta = _get_scaled_auxiliary_weight(auxiliary_weight, batch[query_key],
     batch[auxiliary_query_key])
     ```
-    With filtering, only documents nmatching `batch[filter_key]` on the field `filter_key` are
+    With filtering, only documents matching `batch[filter_key]` on the field `filter_key` are
     returned.
-
     Args:
+        chunk_size (:obj:`int`): number of queries to send to ES at once
         batch (:obj:`Batch`): input query
-        es_instance (:obj:`Elasticsearch`): Elasticsearch instance
-        index_name (:obj:`str`): name of the elasticsearch index
-        query_key (:obj:`str`): name of the elasticsearch field to query and name of the key in the
-            batch
-        auxiliary_key (:obj:`str`): name of the batch field used to query the main elasticsearch
-            field (`query_key`)
-        filter_key (:obj:`str`): name of the field used for filtering
-        auxiliary_weight (:obj:`float`): value of the weight (beta)
-        scale_auxiliary_weight_by_lengths (:obj:`bool`): scale the auxiliary weight by the ratio
-            of the lengths `query`  / `aux_query`
-        k (:obj:`int`): number of results
+        es_instance (:obj:`AsyncElasticsearch`): AsyncElasticsearch instance
+        es_search_fn_config (:obj:`EsSearchFnConfig`): configuration of the search function
         request_timeout (:obj:`int`): timeout value
     """
-    if auxiliary_weight > 0 and auxiliary_key not in batch:
+    if (
+        es_search_fn_config.auxiliary_weight > 0
+        and es_search_fn_config.auxiliary_key not in batch
+    ):
         raise ValueError(
-            f"key `{auxiliary_key}` must be provided if auxiliary_weight > 0, "
+            f"key `{es_search_fn_config.auxiliary_key}` must be provided if auxiliary_weight > 0, "
             f"Found keys {batch.keys()}"
         )
 
-    request = []
-    for eg in iter_batch_egs(batch):
-        use_aux_queries = auxiliary_weight > 0
-        should_query_parts = []
-        filter_query_parts = []
+    def make_chunks_of_es_search_requests(
+        batch: Batch, chunk_size: Optional[int]
+    ) -> Iterable[List[List[Dict]]]:
+        """Iterate over the batch and make groups of requests"""
+        chunk = []
+        idx = 0
+        count = 0
+        for eg in iter_batch_egs(batch):
+            r = _make_query_request(eg, es_search_fn_config)
+            count += 1
+            chunk.extend(r)
+            if chunk_size is not None and count == chunk_size:
+                idx += 1
+                yield chunk
+                chunk = []
+                count = 0
 
-        # make the main query
-        query = eg[query_key]
+        if len(chunk):
+            idx += 1
+            yield chunk
+
+    def es_msearch(es_requests: List[List[Dict]]):
+        """Search and parse the results"""
+        fn = es_instance.msearch
+        if isinstance(es_instance, AsyncElasticsearch):
+            fn = compose_fns(asyncio.run, fn)
+        response = fn(body=es_requests, request_timeout=request_timeout)
+        return response
+
+    def format_es_response(response: Dict) -> Batch:
+        """Format the `msearch` response into a `Batch`"""
+        batch_of_results = defaultdict(list)
+        for item_response in response["responses"]:
+            if "hits" not in item_response:
+                raise ValueError(
+                    f"ES did not return any hits. Response: {item_response}"
+                )
+
+            result_i = defaultdict(list)
+            for hit in item_response["hits"]["hits"]:
+                hit_data = {"scores": hit["_score"], **hit["_source"]}
+                for k, v in hit_data.items():
+                    result_i[k].append(v)
+
+            for k, v in result_i.items():
+                batch_of_results[k].append(v)
+        return batch_of_results
+
+    def search_by_chunks(batch: Batch, chunk_size: int) -> Batch:
+        """Search all the requests in the batch"""
+        idx = 0
+        all_results = defaultdict(list)
+        for es_requests in make_chunks_of_es_search_requests(batch, chunk_size):
+            idx += 1
+            r = es_msearch(es_requests)
+            r = format_es_response(r)
+            for key, value in r.items():
+                all_results[key].extend(value)
+
+        return all_results
+
+    return search_by_chunks(batch, chunk_size)
+
+
+def _make_query_request(eg, config: EsSearchFnConfig) -> List[Dict]:
+    use_aux_queries = config.auxiliary_weight > 0
+    should_query_parts = []
+    filter_query_parts = []
+    # make the main query
+    query = eg[config.query_key]
+    should_query_parts.append(
+        {
+            "match": {
+                config.query_key: {
+                    "query": query,
+                    "operator": "or",
+                }
+            }
+        },
+    )
+    # make the auxiliary query
+    if use_aux_queries:
+        aux_query = eg[config.auxiliary_key]
+        if config.scale_auxiliary_weight_by_lengths:
+            aux_weight_i = _get_scaled_auxiliary_weight(
+                config.auxiliary_weight, query, aux_query
+            )
+        else:
+            aux_weight_i = config.auxiliary_weight
+
         should_query_parts.append(
             {
                 "match": {
-                    query_key: {
-                        "query": query,
+                    config.query_key: {
+                        "query": aux_query,
                         "operator": "or",
+                        "boost": aux_weight_i,
                     }
                 }
             },
         )
+    # make the filter query
+    if config.filter_key is not None:
+        filter_query = eg[config.filter_key]
+        if isinstance(filter_query, torch.Tensor):
+            filter_query = filter_query.item()
+        filter_query_parts.append({"term": {config.filter_key: filter_query}})
 
-        # make the auxiliary query
-        if use_aux_queries:
-            aux_query = eg[auxiliary_key]
-            if scale_auxiliary_weight_by_lengths:
-                aux_weight_i = _get_scaled_auxiliary_weight(
-                    auxiliary_weight, query, aux_query
-                )
-            else:
-                aux_weight_i = auxiliary_weight
+    # output keys (only return the keys that are needed to reduce the size of the response)
+    if config.output_keys is not None:
+        output_query_part = {"_source": config.output_keys}
+    else:
+        output_query_part = {}
 
-            should_query_parts.append(
-                {
-                    "match": {
-                        query_key: {
-                            "query": aux_query,
-                            "operator": "or",
-                            "boost": aux_weight_i,
-                        }
-                    }
-                },
-            )
-
-        # make the filter query
-        if filter_key is not None:
-            filter_query = eg[filter_key]
-            if isinstance(filter_query, torch.Tensor):
-                filter_query = filter_query.item()
-            filter_query_parts.append({"term": {filter_key: filter_query}})
-
-        # make the final request
-        r = {
-            "query": {
-                "bool": {"should": should_query_parts, "filter": filter_query_parts},
-            },
-            "from": 0,
-            "size": k,
-        }
-
-        # append the header and body of the request
-        request.extend([{"index": index_name}, r])
-
-    # run the search
-    result = es_instance.msearch(
-        body=request, index=index_name, request_timeout=request_timeout
-    )
-
-    results = defaultdict(list)
-    for response in result["responses"]:
-        if "hits" not in response:
-            raise ValueError(f"ES did not return any hits. Response: {response}")
-
-        result_i = defaultdict(list)
-        for hit in response["hits"]["hits"]:
-            hit_data = {"scores": hit["_score"], **hit["_source"]}
-            for k, v in hit_data.items():
-                result_i[k].append(v)
-
-        for k, v in result_i.items():
-            results[k].append(v)
-
-    return results
+    # make the final request
+    r = {
+        "query": {
+            "bool": {"should": should_query_parts, "filter": filter_query_parts},
+        },
+        **output_query_part,
+        "from": 0,
+        "size": config.k,
+    }
+    return [{"index": config.index_name}, r]
 
 
 def es_create_index(
-    index_name: str, *, es_instance: Elasticsearch, body: Optional[Dict] = None
+    index_name: str,
+    *,
+    es_instance: Elasticsearch | AsyncElasticsearch,
+    body: Optional[Dict] = None,
 ) -> bool:
     try:
-        response = es_instance.indices.create(index=index_name, body=body)
+        fn = es_instance.indices.create
+        if isinstance(es_instance, AsyncElasticsearch):
+            fn = compose_fns(asyncio.run, fn)
+        response = fn(index=index_name, body=body)
         logger.info(response)
         newly_created = True
 
@@ -173,8 +254,13 @@ def es_create_index(
     return newly_created
 
 
-def es_remove_index(index_name: str, *, es_instance: Elasticsearch):
-    return es_instance.indices.delete(index=index_name)
+def es_remove_index(
+    index_name: str, *, es_instance: Elasticsearch | AsyncElasticsearch
+):
+    fn = es_instance.indices.delete
+    if isinstance(es_instance, AsyncElasticsearch):
+        fn = compose_fns(asyncio.run, fn)
+    return fn(index=index_name)
 
 
 def es_ingest(
@@ -185,22 +271,38 @@ def es_ingest(
     chunk_size=1000,
     request_timeout=200,
 ):
-    actions = []
-    for eg in iter_batch_egs(batch):
-        actions.append(
-            {
-                "_index": index_name,
-                "_source": eg,
-            }
-        )
+    def gen_actions(batch, index_name):
+        for eg in iter_batch_egs(batch):
+            yield {"_index": index_name, "_source": eg}
 
     return es_helpers.bulk(
         es_instance,
-        actions,
+        gen_actions(batch, index_name),
         chunk_size=chunk_size,
         request_timeout=request_timeout,
         refresh="true",
     )
+
+
+async def async_es_ingest(
+    egs: AsyncIterator[Eg],
+    *,
+    es_instance: AsyncElasticsearch,
+    index_name: str,
+):
+    async def gen_actions(egs, index_name):
+        async for eg in egs:
+            yield {"_index": index_name, "_source": eg}
+
+    async for ok, result in es_helpers.async_streaming_bulk(
+        es_instance,
+        gen_actions(egs, index_name),
+        max_retries=10,
+        raise_on_error=True,
+    ):
+        action, result = result.popitem()
+        if not ok:
+            raise ValueError(f"Failed to {action}: {result}")
 
 
 def ping_es(host=None, **kwargs):

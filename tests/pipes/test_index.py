@@ -6,7 +6,6 @@ from typing import Dict
 import datasets
 import numpy as np
 import pytest
-import rich
 import torch
 
 from tests.utils.dummy_model import DummyModel

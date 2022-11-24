@@ -6,7 +6,7 @@ import datasets
 import numpy as np
 import pytest
 
-from warp_pipes.support.search_engines import GroupLookupSearchEngine
+from warp_pipes.search import GroupLookupSearch
 
 n_pts = 1000
 dim = 8
@@ -20,7 +20,7 @@ dataset = datasets.Dataset.from_dict({"document.gid": groups})
 def test_group_lookup_search_engine(cfg: Dict, tmp_path: Path):
     tmp_path = tmp_path / "test-index"
     cfg['path'] = tmp_path
-    engine = GroupLookupSearchEngine(path=tmp_path, config=cfg)
+    engine = GroupLookupSearch(path=tmp_path, config=cfg)
     engine.build(corpus=dataset, vectors=None)
 
     # process a query vector using the `search` interface
