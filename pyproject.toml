@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "warp-pipes"
 version = "0.1.1"
-description = "Simple deterministic and multi-threaded pipelines for data preprocessing."
+description = "Simple finperprintable and parallelizable pipelines for data preprocessing."
 authors = ["Valentin Liévin <valentin.lievin@gmail.com>"]
 
 [tool.poetry.dependencies]
