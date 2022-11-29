@@ -173,6 +173,7 @@ def cache_or_load_vectors(
         tensorstore_callback = TensorStoreCallback(
             store=store,
             output_key=config.model_output_key,
+            asynch=True,
         )
         _process_dataset_with_lightning(
             dataset=dataset,
@@ -182,6 +183,13 @@ def cache_or_load_vectors(
             collate_fn=config.collate_fn,
             loader_kwargs=config.loader_kwargs,
         )
+        futures = tensorstore_callback.futures
+
+        # make sure all writes are complete
+        for future in futures:
+            future.result()
+
+        # close the store
         del store
     else:
         logger.info(f"Loading pre-computed vectors from {target_file.absolute()}")
@@ -208,7 +216,7 @@ def load_store(
         with open(path / "config.json", "r") as f:
             ts_config = json.load(f)
 
-    logger.info(f"> loading (pid={os.getpid()}) {ts_config}...")
+    logger.info(f"Loading store (pid={os.getpid()}) {ts_config}...")
     if use_pdb:
         import remote_pdb
 

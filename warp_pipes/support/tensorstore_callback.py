@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from asyncio import Future
 from typing import List
 from typing import Optional
 
@@ -20,7 +21,7 @@ def write_vectors(
     vectors: torch.Tensor,
     idx: List[int],
     asynch: bool = False,
-) -> None:
+) -> Optional[Future]:
     """write a table to file."""
     if idx is None:
         raise ValueError("idx must be provided")
@@ -30,7 +31,8 @@ def write_vectors(
     vectors = vectors.astype(dtype.numpy_dtype)
 
     if asynch:
-        store[idx].write(vectors)
+        write_future = store[idx].write(vectors)
+        return write_future
     else:
         store[idx] = vectors
 
@@ -55,11 +57,12 @@ class TensorStoreCallback(Callback):
         self,
         store: ts.TensorStore,
         output_key: Optional[str] = None,
-        asynch: bool = False,
+        asynch: bool = True,
     ):
         self.store = store
         self.output_key = output_key
         self.asynch = asynch
+        self.futures = []
 
     def on_predict_batch_end(
         self,
@@ -72,4 +75,11 @@ class TensorStoreCallback(Callback):
     ) -> None:
         """store the outputs of the prediction step to the cache"""
         vectors = select_key_from_output(outputs, self.output_key)
-        write_vectors(self.store, vectors=vectors, idx=batch.get(IDX_COL, None))
+        future = write_vectors(
+            self.store,
+            vectors=vectors,
+            idx=batch.get(IDX_COL, None),
+            asynch=self.asynch,
+        )
+        if future is not None:
+            self.futures.append(future)
