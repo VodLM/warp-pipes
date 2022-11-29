@@ -12,6 +12,7 @@ from datasets import Dataset
 from datasets import DatasetDict
 from torch import Tensor
 
+from warp_pipes.core.condition import Condition
 from warp_pipes.core.pipe import Pipe
 from warp_pipes.pipes.basics import ApplyToAll
 from warp_pipes.pipes.basics import Identity
@@ -26,6 +27,7 @@ from warp_pipes.support.nesting import flatten_nested
 from warp_pipes.support.nesting import nest_idx
 from warp_pipes.support.nesting import nested_list
 from warp_pipes.support.nesting import reconcat
+from warp_pipes.support.pretty import pprint_batch
 from warp_pipes.support.pretty import repr_batch
 from warp_pipes.support.shapes import infer_batch_shape
 from warp_pipes.support.shapes import infer_batch_size
@@ -144,17 +146,19 @@ class ApplyAsFlatten(Pipe):
         level: int | List[str] = 1,
         flatten_idx: bool = True,
         flatten_as_dataset: bool = False,
-        input_filter: Optional[List[str]] = None,
+        input_filter: Optional[Condition] = None,
+        level_offset: int = 0,
+        pprint: bool = False,
         **kwargs,
     ):
-        if input_filter is not None:
-            raise NotImplementedError(
-                "`input_filter` cannot be set manually. "
-                "Set it in the `pipe` argument instead."
-            )
-        super(ApplyAsFlatten, self).__init__(input_filter=pipe.input_filter, **kwargs)
+        if input_filter is None:
+            input_filter = pipe.input_filter
+
+        super(ApplyAsFlatten, self).__init__(input_filter=input_filter, **kwargs)
         self.pipe = pipe
+        self.pprint = pprint
         self.level = level
+        self.level_offset = level_offset
         self.flatten_idx = flatten_idx
         self.flatten_as_dataset = flatten_as_dataset
         self._skip_flatten = (level == 0) and not isinstance(level, list)
@@ -166,10 +170,16 @@ class ApplyAsFlatten(Pipe):
 
     def _call_batch(self, batch: Batch, **kwargs) -> Batch:
         if self._skip_flatten:
-            return self.pipe(batch, **kwargs)
+            return self.pipe._call_batch(batch, **kwargs)
 
         # infer the flattening level
         level = self._infer_flattening_level(batch)
+        pprint_batch(
+            batch,
+            f"ApplyAsFlatten::input (level={level}, "
+            f"input_filter={self.pipe.input_filter})",
+            silent=not self.pprint,
+        )
 
         # infer the original shape of the batch
         ref_shape = infer_batch_shape(batch)[: level + 1]
@@ -177,6 +187,10 @@ class ApplyAsFlatten(Pipe):
         # flatten the batch
         if level > 0 and self.flatten is not None:
             batch = self.flatten(batch, level=level)
+
+        pprint_batch(
+            batch, f"ApplyAsFlatten::flattened (level={level})", silent=not self.pprint
+        )
 
         # compute the new index
         if self.flatten_idx:
@@ -189,11 +203,21 @@ class ApplyAsFlatten(Pipe):
         # apply the batch to the flattened batch
         batch = self.pipe(batch, **kwargs)
 
+        pprint_batch(
+            batch, f"ApplyAsFlatten::pipe::out (level={level})", silent=not self.pprint
+        )
+
         # reshape back to the ref_shape
         if level > 0 and self.flatten is not None:
             output = self.nest(batch, shape=ref_shape)
         else:
             output = batch
+
+        pprint_batch(
+            batch,
+            f"ApplyAsFlatten::pipe::nested (level={level})",
+            silent=not self.pprint,
+        )
 
         # check output and return
         new_shape = infer_batch_shape(output)
@@ -222,7 +246,9 @@ class ApplyAsFlatten(Pipe):
             level = infer_nesting_level(ref_batch)
         else:
             raise TypeError(f"Unsupported type for level: {type(self.level)}")
-        return level
+
+        level += self.level_offset
+        return max(0, level)
 
     def _call_dataset_dict(self, dataset: DatasetDict, **kwargs) -> DatasetDict:
         return self._call_dataset_any(dataset, **kwargs)
