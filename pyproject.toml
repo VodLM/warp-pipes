@@ -20,7 +20,7 @@ pytorch-lightning = "^1.7.7"
 tensorstore = {version = "^0.1.27", allow-prereleases = true}
 pydantic = "^1.10.2"
 hydra-core = "^1.2.0"
-faiss-cpu = "^1.7"
+faiss-cpu = "^1.6.5"
 elasticsearch = "~7"
 
 
