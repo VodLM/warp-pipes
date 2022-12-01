@@ -74,6 +74,9 @@ class TensorStoreCallback(Callback):
         dataloader_idx: int,
     ) -> None:
         """store the outputs of the prediction step to the cache"""
+        while len(self.futures) > 0:
+            future = self.futures.pop(0)
+            future.result()
         vectors = select_key_from_output(outputs, self.output_key)
         future = write_vectors(
             self.store,

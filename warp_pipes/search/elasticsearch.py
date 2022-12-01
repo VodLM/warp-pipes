@@ -219,7 +219,7 @@ class ElasticSearch(Search):
 
     def __len__(self) -> int:
         """Return the number of vectors in the index."""
-        return -1
+        return self.corpus_size
 
     def cpu(self):
         """Move the index to CPU."""
