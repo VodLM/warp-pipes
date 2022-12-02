@@ -7,7 +7,7 @@ authors = ["Valentin Liévin <valentin.lievin@gmail.com>"]
 [tool.poetry.dependencies]
 python = "^3.8"
 numpy = "^1.23.4"
-torch = "~1.12" # 1.13 throws error as it attempts to install `nvidia-cublas-cu11 `
+torch = ">=1.12, !=1.13.0" # 1.13.0 throws error as it attempts to install `nvidia-cublas-cu11 `
 datasets = "~2.5"
 omegaconf = "^2.2.3"
 rich = "^12.6.0"
