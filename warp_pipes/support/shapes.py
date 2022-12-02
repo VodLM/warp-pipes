@@ -1,3 +1,4 @@
+import math
 from numbers import Number
 from typing import Any
 from typing import Dict
@@ -170,6 +171,12 @@ def infer_batch_shape(
         return shape, shapes
     else:
         return shape
+
+
+def infer_nesting_level(batch: Batch) -> int:
+    """Infer the nesting level of the batch."""
+    batch_shape = infer_batch_shape(batch)
+    return max(0, len(batch_shape) - 1)
 
 
 def infer_missing_dims(n_elements: int, *, shape: List[int]) -> List[int]:

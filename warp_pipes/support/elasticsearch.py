@@ -128,29 +128,45 @@ def es_search(
 
     def es_msearch(es_requests: List[List[Dict]]):
         """Search and parse the results"""
+        n_queries = len(es_requests) // 2
         fn = es_instance.msearch
         if isinstance(es_instance, AsyncElasticsearch):
             fn = compose_fns(asyncio.run, fn)
         response = fn(body=es_requests, request_timeout=request_timeout)
+        n_responses = len(response["responses"])
+        if n_responses != n_queries:
+            raise ValueError(
+                f"Expected {n_queries} responses, got {n_responses} responses."
+            )
         return response
 
     def format_es_response(response: Dict) -> Batch:
         """Format the `msearch` response into a `Batch`"""
-        batch_of_results = defaultdict(list)
+        # scan the results to identify the output keys
+        output_keys = {
+            "scores",
+        }
+        max_hits = 0
         for item_response in response["responses"]:
             if "hits" not in item_response:
                 raise ValueError(
-                    f"ES did not return any hits. Response: {item_response}"
+                    f"ES did not return any hit. Response: {item_response}"
                 )
+            max_hits = max(max_hits, len(item_response["hits"]["hits"]))
+            for hit in item_response["hits"]["hits"][:1]:
+                output_keys |= set(hit["_source"].keys())
 
-            result_i = defaultdict(list)
+        # traverse all responses to create the batch of results
+        n_responses = len(response["responses"])
+        batch_of_results = {
+            k: [list() for _ in range(n_responses)] for k in output_keys
+        }
+        for j, item_response in enumerate(response["responses"]):
             for hit in item_response["hits"]["hits"]:
                 hit_data = {"scores": hit["_score"], **hit["_source"]}
                 for k, v in hit_data.items():
-                    result_i[k].append(v)
+                    batch_of_results[k][j].append(v)
 
-            for k, v in result_i.items():
-                batch_of_results[k].append(v)
         return batch_of_results
 
     def search_by_chunks(batch: Batch, chunk_size: int) -> Batch:
@@ -159,6 +175,7 @@ def es_search(
         all_results = defaultdict(list)
         for es_requests in make_chunks_of_es_search_requests(batch, chunk_size):
             idx += 1
+
             r = es_msearch(es_requests)
             r = format_es_response(r)
             for key, value in r.items():

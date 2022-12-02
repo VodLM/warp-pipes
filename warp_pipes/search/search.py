@@ -12,6 +12,7 @@ from typing import Tuple
 
 import numpy as np
 import omegaconf
+import rich
 import torch
 from datasets import Dataset
 from hydra.utils import instantiate
@@ -55,7 +56,6 @@ class SearchConfig(FingerprintableConfig):
     # main arguments
     k: int = 10
     merge_previous_results: bool = True
-    k_max: Optional[int] = None
     # query input field and keys
     query_field = "query"
     query_input_keys: List[str] = []
@@ -249,7 +249,9 @@ class Search(Pipe, metaclass=abc.ABCMeta):
         """
         k = k or self.config.k
         pprint_batch(
-            query, f"{type(self).__name__}::base::query", silent=not self.config.verbose
+            query,
+            f"{type(self).__name__}::base::query (k={k}, config:{self.config.k})",
+            silent=not self.config.verbose,
         )
 
         # Auto-load the engine if it is not already done.
@@ -301,12 +303,9 @@ class Search(Pipe, metaclass=abc.ABCMeta):
                 scores=scores_i,
                 **kwargs,
             )
-            r = r.to(format)
 
-            # potentially resize the results
-            if self.config.k_max is not None:
-                if r.shape[1] > self.config.k_max:
-                    r = r.resize(self.config.k_max)
+            # format and resize
+            r = r.to(format)
 
             # append the batch of search results to the previous ones
             assert isinstance(r, SearchResult)
@@ -321,7 +320,9 @@ class Search(Pipe, metaclass=abc.ABCMeta):
 
         # format the output (make sure to return `k` results.)
         search_results = search_results.to(format=format)
-        search_results = search_results.resize(self.config.k)
+        search_results = search_results.resize(k)
+        if self.__len__() > 0:
+            search_results = search_results.fill_masked_indices((0, self.__len__()))
         output = {
             self.index_key: search_results.indices,
             self.score_key: search_results.scores,
