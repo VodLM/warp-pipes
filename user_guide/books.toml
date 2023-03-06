@@ -1,0 +1,14 @@
+[book]
+authors = ["Valentin Liévin"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Warp Pipes - User Guide"
+
+[output.html]
+default-theme   = "Ayu"
+mathjax-support = true
+
+[output.html.fold]
+enable = true
+level = 1
