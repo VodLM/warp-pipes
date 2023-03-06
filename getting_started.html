@@ -1,0 +1,283 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Getting started</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="getting_started.html" class="active"><strong aria-hidden="true">2.</strong> Getting started</a></li><li class="chapter-item expanded "><a href="pipes.html"><strong aria-hidden="true">3.</strong> Pipes</a></li><li class="chapter-item expanded "><a href="contributing.html"><strong aria-hidden="true">4.</strong> Contributing</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title"></h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="getting-started"><a class="header" href="#getting-started">Getting started</a></h1>
+<h2 id="collates-process-aka-map-and-reduce"><a class="header" href="#collates-process-aka-map-and-reduce">Collates process (aka. map and reduce)</a></h2>
+<p>In this first example we go trough the steps involved in defining a parralized pipeline that takes in a batch of document objects, runs the preprocessing in parallel, limits the size of the passages and finally collates the result into appropriate tensors to digest.</p>
+<p>These steps of operations are very similar to a map/+reduce operation, just with a few extra map operations.</p>
+<p>First we tokenize the batch of data in parallel.</p>
+<pre><code class="language-python">import transformers
+from warp_pipes.pipes import Parallel, Sequential, TokenizerPipe
+from warp_pipes.pipes import HasPrefix
+
+# example batch w. one object
+batch = {
+    &quot;document.text&quot;: [
+        &quot;&quot;&quot;
+        Fipple flutes are found in many cultures around the world.
+        Often with six holes, the shepherd's pipe is a common pastoral image.
+        Shepherds often piped both to soothe the sheep and to amuse themselves.
+        Modern manufactured six-hole folk pipes are referred to as pennywhistle or 
+        tin whistle. The recorder is a form of pipe, often used as a rudimentary 
+        instructional musical instrument at schools, but versatile enough that 
+        it is also used in orchestral music.
+        &quot;&quot;&quot;
+    ],
+    &quot;title.text&quot;: [&quot;Title: Pipe. &quot;],
+    &quot;document.idx&quot;: [0],
+}
+
+# construct pipe which tokenizes the text and title attributes
+tokenizer = transformers.AutoTokenizer.from_pretrained('bert-base-cased')
+tokenizer_pipe = Parallel(
+    Sequential(
+        TokenizerPipe(
+            tokenizer, key=&quot;text&quot;, field=&quot;document&quot;, 
+            return_offsets_mapping=True, add_special_tokens=False, update=True),
+        input_filter=HasPrefix(&quot;document&quot;)
+    ),
+    Sequential(
+        TokenizerPipe(
+            tokenizer, key=&quot;text&quot;, field=&quot;title&quot;, 
+            return_offsets_mapping=True, add_special_tokens=False, update=True),
+        input_filter=HasPrefix(&quot;document&quot;)
+    ),
+    update=True
+)
+
+# execute pipe by sending through the document batch
+tokenized_batch = tokenizer_pipe(batch)
+print(tokenized_batch)
+</code></pre>
+<p>Then we generate passages in accordance to some specified constraints.</p>
+<pre><code class="language-python">from warp_pipes.pipes.passages import GeneratePassages
+
+tokenizer =  ...
+tokenized_batch = ...
+
+# generate final passages by setting the size and stride for a preprocessed batch
+passages_pipe = GeneratePassages(
+    size=30,
+    stride=20,
+    field=&quot;document&quot;,
+    global_keys=[&quot;idx&quot;],
+    start_tokens=[tokenizer.cls_token_id],
+    end_tokens=[tokenizer.sep_token_id],
+    prepend_field=&quot;title&quot;,
+)
+passages = passages_pipe(tokenized_batch, header=&quot;Passages&quot;)
+print(passages)
+</code></pre>
+<p>Finally we collate the documents into tensors.</p>
+<pre><code class="language-python">from warp_pipes.pipes import CollateField
+from warp_pipes.support.functional import get_batch_eg
+
+# some result of GeneratePassages pipe
+passages = ...
+
+# extract the document field, run pipe transformation into tensors
+collate_docs = CollateField(
+    field=&quot;document&quot;, 
+    to_tensor=[&quot;idx&quot;, &quot;input_ids&quot;, &quot;attention_mask&quot;]
+)
+
+# fetch only documents from passages, perform the collate process
+egs = [get_batch_eg(passages, idx=i) for i  in [0, 1, 2, 3]]
+c_batch = collate_docs(egs, to_tensor=[])
+print(c_batch, &quot;output batch&quot;)
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="introduction.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="pipes.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="introduction.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="pipes.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
