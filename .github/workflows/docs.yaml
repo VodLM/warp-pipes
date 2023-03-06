@@ -2,7 +2,7 @@ name: WarpPipes Guides
 
 on:
   push:
-    branches: ["benjamin/bumps"]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
