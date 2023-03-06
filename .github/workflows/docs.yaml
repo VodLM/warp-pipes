@@ -2,9 +2,7 @@ name: WarpPipes Guides
 
 on:
   push:
-    branches:
-      - main
-      - benjamin/bumps
+    branches: ["benjamin/bumps"]
   workflow_dispatch:
 
 permissions:
@@ -17,12 +15,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  deploy:
     name: docs
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v2
-
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: '.'
       - name: Setup Python
         uses: actions/setup-python@v2
         with:
@@ -32,7 +39,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y graphviz make wget
-          python -m pip install ghp-import
+          #python -m pip install ghp-import
           sudo wget https://github.com/rust-lang/mdBook/releases/download/v0.4.7/mdbook-v0.4.7-x86_64-unknown-linux-gnu.tar.gz -O - | sudo tar -xzf - -C /usr/bin/
           sudo wget https://github.com/ritchie46/mdBook/releases/download/api-0.0.1/mdbook -O /usr/bin/mdbook2
           sudo chmod +x /usr/bin/mdbook2
@@ -41,12 +48,16 @@ jobs:
       #   run: |
       #     make run
 
-      - name: Deploy docs
+      - name: Build docs
         run: |
           mkdir -p docs
           cd user_guide
           mdbook build --dest-dir ../docs/user-guide .
           cd ..
           echo '<meta http-equiv=refresh content=0;url=/warppipes-book/user-guide/index.html>' > docs/index.html
-          ghp-import --no-jekyll docs
-          git push -qf https://${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git gh-pages
+          #ghp-import --no-jekyll docs
+          #git push -qf https://${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git gh-pages
+        
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v1
