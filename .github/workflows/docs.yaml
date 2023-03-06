@@ -1,65 +1,29 @@
-name: WarpPipes Guides
+name: WarpPipes Guides | GitHub Pages
 
 on:
   push:
     branches: ["main"]
+  pull_request:
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
-
 jobs:
-  build:
-    name: docs
+  deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Setup Pages
-        uses: actions/configure-pages@v3
+      - name: Setup mdBook
+        uses: peaceiris/actions-mdbook@v1
         with:
-          path: '.'
-      - name: Setup Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.8
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y graphviz make wget
-          #python -m pip install ghp-import
-          sudo wget https://github.com/rust-lang/mdBook/releases/download/v0.4.7/mdbook-v0.4.7-x86_64-unknown-linux-gnu.tar.gz -O - | sudo tar -xzf - -C /usr/bin/
-          sudo wget https://github.com/ritchie46/mdBook/releases/download/api-0.0.1/mdbook -O /usr/bin/mdbook2
-          sudo chmod +x /usr/bin/mdbook2
-
+          mdbook-version: 'latest'
+      - run: cd user_guide && mdbook build
       - name: Build docs
-        run: |
-          mkdir -p docs
-          cd user_guide
-          mdbook build --dest-dir ../_site .
-          cd ..
-          #echo '<meta http-equiv=refresh content=0;url=/warppipes-book/user-guide/index.html>' > docs/index.html
-          #ghp-import --no-jekyll docs
-          #git push -qf https://${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git gh-pages
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v1
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v1
-
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        if: ${{ github.ref == 'refs/heads/main' }}
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./user_guide/book
