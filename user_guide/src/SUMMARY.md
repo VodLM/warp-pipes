@@ -2,5 +2,6 @@
 
 - [Introduction](introduction.md)
 - [Getting started](getting_started.md)
-- [Pipes](pipes.md)
+- [WarpPipes](warp-pipes.md)
+    -[Pipe](pipes.md)
 - [Contributing](contributing.md)
