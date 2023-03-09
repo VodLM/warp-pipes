@@ -84,7 +84,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="getting_started.html"><strong aria-hidden="true">2.</strong> Getting started</a></li><li class="chapter-item expanded "><a href="pipes.html"><strong aria-hidden="true">3.</strong> Pipes</a></li><li class="chapter-item expanded "><a href="contributing.html"><strong aria-hidden="true">4.</strong> Contributing</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="getting_started.html"><strong aria-hidden="true">2.</strong> Getting started</a></li><li class="chapter-item expanded "><a href="warp-pipes.html"><strong aria-hidden="true">3.</strong> WarpPipes</a></li><li class="chapter-item expanded "><a href="contributing.html"><strong aria-hidden="true">4.</strong> Contributing</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -147,8 +147,10 @@
                     <main>
                         <div style="margin: 30px auto; background-color: white; border-radius: 50%; width: 200px; height: 200px;"><img src="https://raw.githubusercontent.com/VodLM/warp-pipes/main/assets/header.png" alt="WarpPipes logo" style="width: 200px; padding: 60px 0px;"></div>
 <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
-<p>This book is an introduction to WarpPipes - a data processing module improving the workings with HuggingFace datasets.
-The goal of this guide is to introduce you to <code>WarpPipes</code> trough examples and comparing it against other solutions.</p>
+<p>Welcome to the WarpPipes library - a data processing module designed to improve the functionality of HuggingFace datasets. </p>
+<p>This book serves as an introduction to the library's features and how to use it effectively. Through examples and comparisons to other solutions, readers will gain a comprehensive overview of the library.</p>
+<p>At the core of the <code>warp_pipes</code> library is the <code>Pipe</code> class, which provides an atomic processing unit capable of ingesting, modifying, and returning batches of data. These pipes can be combined into <code>Pipelines</code>, which are containers that allow multiple processing steps to be combined into a single unit. Overall, the <code>warp_pipes</code> library offers a flexible and extensible way to define and apply custom processing steps to data.</p>
+<p>If you're a HuggingFace user, this Python package provides a framework for building more flexible and advanced processing steps for your dataset.</p>
 <h2 id="related-projects"><a class="header" href="#related-projects">Related projects</a></h2>
 <ul>
 <li>TODO: HuggingFace Community</li>
@@ -244,11 +246,18 @@ egs = [get_batch_eg(passages, idx=i) for i  in [0, 1, 2, 3]]
 c_batch = collate_docs(egs, to_tensor=[])
 print(c_batch, &quot;output batch&quot;)
 </code></pre>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="pipes"><a class="header" href="#pipes">Pipes</a></h1>
-<p>Pipes are considered atomic processing units, flexible in nature and responsible for ingesting, modifying and transforming input datasets into new batches of data. Different variant of such pipes exist namely: <code>parallelized</code>, <code>sequential</code>, <code>tokenizationation</code> etc.. Creating custom pipes can be done by following the core conventions of the <code>pipe</code> base object. </p>
-<p>What's common among them are they inherit <code>fingerprintable</code> to extend their capabilities with features like safe serialization, multiprocessing and caching.</p>
-<h2 id="pipelines"><a class="header" href="#pipelines">Pipelines</a></h2>
-<p>Pipelines are like containers for pipes. They orchestrate the configuration and alignment of pipes to perform multiple data processing steps as a combined unit.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="warppipes"><a class="header" href="#warppipes">WarpPipes</a></h1>
+<p>WarpPipes build on a concept called <code>Pipe</code>. It is a powerful and versatile class that forms the core of many HuggingFace Dataset operations.</p>
+<p>With <code>Pipe</code>, you can easily </p>
+<ul>
+<li>rename and remove columns. </li>
+<li>apply processing functions to each example in a dataset.</li>
+<li>concatenate datasets.</li>
+<li>apply custom formatting transformations. </li>
+</ul>
+<p>All pipes inherit the <code>fingerprintable</code> class, which extends their capabilities with features such as safe serialization, multiprocessing, and caching. This makes the performance of WarpPipes very fast and data transformations seamlessly.</p>
+<p>With WarpPipes, users can wrap an arbitrary number of pipes into a single <code>Pipeline</code>, providing flexibility and control over their data processing.</p>
+<p>To better understand the capability of <code>Pipe</code>, let's explore some examples.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="contributing"><a class="header" href="#contributing">Contributing</a></h1>
 
                     </main>

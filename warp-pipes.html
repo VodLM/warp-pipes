@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Pipes</title>
+        <title>WarpPipes</title>
 
 
         <!-- Custom HTML head -->
@@ -83,7 +83,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="getting_started.html"><strong aria-hidden="true">2.</strong> Getting started</a></li><li class="chapter-item expanded "><a href="pipes.html" class="active"><strong aria-hidden="true">3.</strong> Pipes</a></li><li class="chapter-item expanded "><a href="contributing.html"><strong aria-hidden="true">4.</strong> Contributing</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="getting_started.html"><strong aria-hidden="true">2.</strong> Getting started</a></li><li class="chapter-item expanded "><a href="warp-pipes.html" class="active"><strong aria-hidden="true">3.</strong> WarpPipes</a></li><li class="chapter-item expanded "><a href="contributing.html"><strong aria-hidden="true">4.</strong> Contributing</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -144,11 +144,18 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="pipes"><a class="header" href="#pipes">Pipes</a></h1>
-<p>Pipes are considered atomic processing units, flexible in nature and responsible for ingesting, modifying and transforming input datasets into new batches of data. Different variant of such pipes exist namely: <code>parallelized</code>, <code>sequential</code>, <code>tokenizationation</code> etc.. Creating custom pipes can be done by following the core conventions of the <code>pipe</code> base object. </p>
-<p>What's common among them are they inherit <code>fingerprintable</code> to extend their capabilities with features like safe serialization, multiprocessing and caching.</p>
-<h2 id="pipelines"><a class="header" href="#pipelines">Pipelines</a></h2>
-<p>Pipelines are like containers for pipes. They orchestrate the configuration and alignment of pipes to perform multiple data processing steps as a combined unit.</p>
+                        <h1 id="warppipes"><a class="header" href="#warppipes">WarpPipes</a></h1>
+<p>WarpPipes build on a concept called <code>Pipe</code>. It is a powerful and versatile class that forms the core of many HuggingFace Dataset operations.</p>
+<p>With <code>Pipe</code>, you can easily </p>
+<ul>
+<li>rename and remove columns. </li>
+<li>apply processing functions to each example in a dataset.</li>
+<li>concatenate datasets.</li>
+<li>apply custom formatting transformations. </li>
+</ul>
+<p>All pipes inherit the <code>fingerprintable</code> class, which extends their capabilities with features such as safe serialization, multiprocessing, and caching. This makes the performance of WarpPipes very fast and data transformations seamlessly.</p>
+<p>With WarpPipes, users can wrap an arbitrary number of pipes into a single <code>Pipeline</code>, providing flexibility and control over their data processing.</p>
+<p>To better understand the capability of <code>Pipe</code>, let's explore some examples.</p>
 
                     </main>
 
