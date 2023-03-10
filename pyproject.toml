@@ -5,7 +5,7 @@ description = "Simple finperprintable and parallelizable pipelines for data prep
 authors = ["Valentin Liévin <valentin.lievin@gmail.com>"]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.8, <3.11"
 numpy = "^1.23.4"
 torch = ">=1.12, !=1.13.0" # 1.13.0 throws error as it attempts to install `nvidia-cublas-cu11 `
 datasets = "~2.5"
