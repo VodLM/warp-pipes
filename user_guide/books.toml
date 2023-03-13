@@ -1,5 +1,5 @@
 [book]
-authors = ["Valentin Liévin"]
+authors = ["Valentin Liévin", "Benjamin Starostka", "Andreas Geert Motzfeldt"]
 language = "en"
 multilingual = false
 src = "src"
