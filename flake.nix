@@ -42,6 +42,7 @@
             pkgs.du-dust
             pkgs.starship
             pkgs.magic-wormhole
+            pkgs.graphviz
           ];
 
           shellHook = ''

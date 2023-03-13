@@ -1,8 +1,27 @@
 [tool.poetry]
 name = "warp-pipes"
 version = "0.1.2"
-description = "Simple finperprintable and parallelizable pipelines for data preprocessing."
-authors = ["Valentin Liévin <valentin.lievin@gmail.com>"]
+description = "Simple fingerprintable and parallelizable pipelines for data preprocessing."
+authors = [
+    "Valentin Liévin <valentin.lievin@gmail.com>",
+    "Andreas Motzfeldt <andreas@motzfeldt.dk>",
+    "Benjamin Starostka J. <benjamin@starostka.io>"
+]
+license = "MIT"
+readme = "README.md"
+homepage = ""
+repository = ""
+keywords = ["variational-open-domain", "question-answering", "generative", "functional", "HuggingFace", "LLM"]
+classifiers = [
+    "Environment :: Development",
+    "Framework :: HuggingFace",
+    "Topic :: Data Processing :: Documentation",
+    "Topic :: Data Processing :: Libraries :: Python Modules",
+    "Topic :: Data Processing :: Functional :: Declarative",
+]
+include = [
+    "LICENSE",
+]
 
 [tool.poetry.dependencies]
 python = "^3.8, <3.11"
