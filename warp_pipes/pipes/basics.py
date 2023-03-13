@@ -207,6 +207,7 @@ class Apply(Pipe):
 
     def _call_batch(self, batch: Batch, **kwargs) -> Batch:
         for key, op in self.ops.items():
+            print(op)
             values = batch[key]
             if self.element_wise:
                 batch[key] = apply_to_json_struct(values, op)
