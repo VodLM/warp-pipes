@@ -43,6 +43,9 @@
             pkgs.starship
             pkgs.magic-wormhole
             pkgs.graphviz
+            pkgs.mdbook
+            pkgs.mdbook-katex
+            pkgs.mdbook-open-on-gh
           ];
 
           shellHook = ''

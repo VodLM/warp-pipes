@@ -1,10 +1,10 @@
 # Pipes
 `warp_pipes` is a library that provides a way to process data through pipes and pipelines. The `Pipe` class is a key component of the library, providing an atomic processing unit that can ingest, modify, and return batches of data. The `Pipe` class is designed to be flexible and can handle various types of input data, including:
 
-- List[Eg]
-- Batch
-- datasets.Dataset
-- datasets.DatasetDict
+- `List[Eg]`
+- `Batch`
+- `datasets.Dataset`
+- `datasets.DatasetDict`
 
 It is an abstract class that defines a single method _call_batch that takes a batch of data, applies the pipe to it, and returns the modified batch. The Pipe class has several properties that can be used to configure the behavior of the pipe. These include:
 

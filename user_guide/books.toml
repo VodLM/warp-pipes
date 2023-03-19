@@ -9,6 +9,14 @@ title = "Warp Pipes - User Guide"
 default-theme   = "Ayu"
 mathjax-support = true
 
+[preprocessor.yml-header]
+[preprocessor.pagetoc]
+[preprocessor.kroki-preprocessor]
+
+[output.html]
+additional-css = ["theme/pagetoc.css"]
+additional-js  = ["theme/pagetoc.js"]
+
 [output.html.fold]
 enable = true
 level = 1
