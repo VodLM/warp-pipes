@@ -22,7 +22,7 @@ print(updated_dataset[0:3])
 
 #
 #dataset = load_dataset("glue", "mrpc", split="train")
-pipeline = Sequential(Apply(ops = {"sentence1": lambda x: "pre_fix"+x}, element_wise=True).prefix(),
+pipeline = Sequential(Apply(ops = {"sentence1": lambda x: "pre_fix"+x}, element_wise=True),
                       DropKeys(["sentence2", "idx"]))
 
 
