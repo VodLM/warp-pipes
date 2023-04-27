@@ -24,9 +24,10 @@ include = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.8, <3.11"
+python = "^3.9"
 numpy = "^1.23.4"
-torch = ">=1.12, !=1.13.0" # 1.13.0 throws error as it attempts to install `nvidia-cublas-cu11 `
+torch = "^2.0.0"
+pytorch-lightning = "^2.0.0"
 datasets = "~2.5"
 omegaconf = "^2.2.3"
 rich = "^12.6.0"
@@ -35,11 +36,11 @@ transformers = "^4.23.1"
 jsondiff = "^2.0.0"
 singledispatchmethod = "^1.0"
 stackprinter = "^0.2.9"
-pytorch-lightning = "^1.7.7"
 tensorstore = {version = "^0.1.27", allow-prereleases = true}
 pydantic = "^1.10.2"
 hydra-core = "^1.2.0"
-faiss-cpu = "^1.6.5"
+faiss-gpu = { platform = 'linux', version = '^1.6.5' }
+faiss-cpu = { platform = 'darwin', version = '^1.6.5' }
 elasticsearch = "^7"
 
 [tool.poetry.group.dev.dependencies]
