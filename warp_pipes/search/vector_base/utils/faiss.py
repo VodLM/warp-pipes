@@ -366,16 +366,26 @@ def populate_ivf_index(
             logger.info(
                 f"Reached max. size per GPU ({max_add}), " f"flushing indices to CPU"
             )
-            for i in range(ngpu):
-                index_src_gpu = faiss.downcast_index(gpu_index.at(i))
-                index_src = faiss.index_gpu_to_cpu(index_src_gpu)
+            if ngpu > 1:
+                for i in range(ngpu):
+                    index_src_gpu = faiss.downcast_index(gpu_index.at(i))
+                    index_src = faiss.index_gpu_to_cpu(index_src_gpu)
+                    index_src.copy_subset_to(cpu_index, 0, 0, nb)
+                    index_src_gpu.reset()
+                    index_src_gpu.reserveMemory(max_add)
+            else:
+                index_src = faiss.index_gpu_to_cpu(gpu_index)
                 index_src.copy_subset_to(cpu_index, 0, 0, nb)
-                index_src_gpu.reset()
-                index_src_gpu.reserveMemory(max_add)
+                gpu_index.reset()
+                gpu_index.reserveMemory(max_add)
             try:
                 gpu_index.sync_with_shard_indexes()
             except AttributeError:
-                gpu_index.syncWithSubIndexes()
+                try:
+                    gpu_index.syncWithSubIndexes()
+                except AttributeError as e:
+                    logger.warning(f"{e}")
+                    pass
 
         sys.stdout.flush()
     logger.info("Populating time: %.3f s" % (time.time() - t0))
