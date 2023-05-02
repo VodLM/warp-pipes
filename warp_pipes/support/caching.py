@@ -24,6 +24,7 @@ from pytorch_lightning import LightningModule
 from pytorch_lightning import Trainer
 from pytorch_lightning.utilities import move_data_to_device
 from torch import nn
+import torch.distributed as dist
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset as TorchDataset
 from tqdm import tqdm
@@ -161,6 +162,8 @@ def cache_or_load_vectors(
         target_file, dset_shape, driver=config.driver, dtype=config.dtype
     )
     if not target_file.exists():
+        # Add a barrier here
+        dist.barrier()
         logger.info(f"Writing vectors to {target_file.absolute()}")
         store = ts.open(ts_config, create=True, delete_existing=False).result()
         with open(target_file / "config.json", "w") as f:
@@ -192,8 +195,12 @@ def cache_or_load_vectors(
         # close the store
         del store
     else:
+        # Add a barrier here
+        dist.barrier()
         logger.info(f"Loading pre-computed vectors from {target_file.absolute()}")
 
+    # Add a barrier here
+    dist.barrier()
     # reload the same TensorStore in read mode
     store = load_store(target_file, read=True, write=False)
     _validate_store(store, dset_shape, target_file)
