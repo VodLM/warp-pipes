@@ -194,6 +194,10 @@ def cache_or_load_vectors(
     else:
         logger.info(f"Loading pre-computed vectors from {target_file.absolute()}")
 
+    # make sure the first process/GPU is done writing before loading
+    torch.distributed.barrier()
+
+
     # reload the same TensorStore in read mode
     store = load_store(target_file, read=True, write=False)
     _validate_store(store, dset_shape, target_file)
