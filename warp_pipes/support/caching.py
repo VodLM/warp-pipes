@@ -162,7 +162,7 @@ def cache_or_load_vectors(
         target_file, dset_shape, driver=config.driver, dtype=config.dtype
     )
     # synchronize all workers before checking if the file exists
-    dist.barrier()
+    # dist.barrier()
 
     if not target_file.exists():
         # only the first worker creates the file
@@ -201,7 +201,7 @@ def cache_or_load_vectors(
         logger.info(f"Loading pre-computed vectors from {target_file.absolute()}")
 
     # synchronize all workers after checking if the file exists
-    dist.barrier()
+    # dist.barrier()
 
     # reload the same TensorStore in read mode
     store = load_store(target_file, read=True, write=False)
