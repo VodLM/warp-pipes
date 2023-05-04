@@ -130,16 +130,16 @@ def cache_or_load_vectors(
     Returns:
         ts.TensorStore: cached dataset vectors
     """
+    if not isinstance(config, CacheConfig):
+        config = CacheConfig(**config)
+
+    model = maybe_wrap_model(model)
+
     # setup the distributed environment, if any.
     # This is done automatically by the trainer when lauching a task (hacky, but working).
     # Might be unnecessary in future versions of lightning.
     if model.strategy.launcher is not None:
         model.strategy.launcher.launch(_do_nothing)
-
-    if not isinstance(config, CacheConfig):
-        config = CacheConfig(**config)
-
-    model = maybe_wrap_model(model)
 
     # infer the vector size from the model output
     dset_shape = _infer_dset_shape(
@@ -190,7 +190,7 @@ def cache_or_load_vectors(
             output_key=config.model_output_key,
             asynch=True,
         )
-
+        
         _process_dataset_with_lightning(
             dataset=dataset,
             model=model,
