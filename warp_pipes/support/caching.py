@@ -134,7 +134,7 @@ def cache_or_load_vectors(
         config = CacheConfig(**config)
 
     model = maybe_wrap_model(model)
-
+    print(config)
     dist.init_process_group(
         backend='nccl', 
         init_method=f'file://{config.shared_cache_dir}', 
