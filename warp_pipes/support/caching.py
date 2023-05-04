@@ -161,7 +161,7 @@ def cache_or_load_vectors(
     ts_config = make_ts_config(
         target_file, dset_shape, driver=config.driver, dtype=config.dtype
     )
-# synchronize all workers before checking if the file exists
+    # synchronize all workers before checking if the file exists
     dist.barrier()
 
     if not target_file.exists():
