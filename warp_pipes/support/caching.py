@@ -161,16 +161,19 @@ def cache_or_load_vectors(
     ts_config = make_ts_config(
         target_file, dset_shape, driver=config.driver, dtype=config.dtype
     )
+# synchronize all workers before checking if the file exists
+    dist.barrier()
+
     if not target_file.exists():
-        # Add a barrier here
-        dist.barrier()
-        logger.info(f"Writing vectors to {target_file.absolute()}")
-        store = ts.open(ts_config, create=True, delete_existing=False).result()
-        with open(target_file / "config.json", "w") as f:
-            ts_config_ = {
-                k: v for k, v in ts_config.items() if k in ["driver", "kvstore"]
-            }
-            json.dump(ts_config_, f)
+        # only the first worker creates the file
+        if dist.get_rank() == 0:
+            logger.info(f"Writing vectors to {target_file.absolute()}")
+            store = ts.open(ts_config, create=True, delete_existing=False).result()
+            with open(target_file / "config.json", "w") as f:
+                ts_config_ = {
+                    k: v for k, v in ts_config.items() if k in ["driver", "kvstore"]
+                }
+                json.dump(ts_config_, f)
 
         # init a callback to store predictions in the TensorStore
         tensorstore_callback = TensorStoreCallback(
@@ -195,12 +198,11 @@ def cache_or_load_vectors(
         # close the store
         del store
     else:
-        # Add a barrier here
-        dist.barrier()
         logger.info(f"Loading pre-computed vectors from {target_file.absolute()}")
 
-    # Add a barrier here
+    # synchronize all workers after checking if the file exists
     dist.barrier()
+
     # reload the same TensorStore in read mode
     store = load_store(target_file, read=True, write=False)
     _validate_store(store, dset_shape, target_file)
