@@ -138,6 +138,8 @@ def cache_or_load_vectors(
     # setup the distributed environment, if any.
     # This is done automatically by the trainer when lauching a task (hacky, but working).
     # Might be unnecessary in future versions of lightning.
+    print(model)
+    print(type(model))
     if model.trainer.strategy.launcher is not None:
         model.trainer.strategy.launcher.launch(_do_nothing)
     
