@@ -23,7 +23,6 @@ from loguru import logger
 from pytorch_lightning import LightningModule
 from pytorch_lightning import Trainer
 from pytorch_lightning.utilities import move_data_to_device
-from pytorch_lightning.utilities.distributed import rank_zero_only
 from torch import nn
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset as TorchDataset
