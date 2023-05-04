@@ -16,7 +16,7 @@ import pydantic
 from datasets import Dataset
 from elasticsearch import AsyncElasticsearch
 from elasticsearch import Elasticsearch
-from elasticsearch.exceptions import ElasticsearchWarning
+from elasticsearch import ElasticsearchWarning
 from loguru import logger
 from tqdm.auto import tqdm
 
