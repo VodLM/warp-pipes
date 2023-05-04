@@ -137,8 +137,8 @@ def cache_or_load_vectors(
 
     dist.init_process_group(
         backend='nccl', 
-        init_method=f'file://{config.sys.shared_cache_dir}', 
-        world_size=config.trainer.devices, 
+        init_method=f'file://{config.shared_cache_dir}', 
+        world_size=torch.cuda.device_count(), 
         rank=os.environ['LOCAL_RANK']
         )
 
