@@ -129,10 +129,18 @@ def cache_or_load_vectors(
     Returns:
         ts.TensorStore: cached dataset vectors
     """
+
     if not isinstance(config, CacheConfig):
         config = CacheConfig(**config)
 
     model = maybe_wrap_model(model)
+
+    dist.init_process_group(
+        backend='nccl', 
+        init_method=f'file://{config.sys.shared_cache_dir}', 
+        world_size=config.trainer.devices, 
+        rank=os.environ['LOCAL_RANK']
+        )
 
     # infer the vector size from the model output
     dset_shape = _infer_dset_shape(
