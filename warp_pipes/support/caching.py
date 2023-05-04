@@ -23,8 +23,8 @@ from loguru import logger
 from pytorch_lightning import LightningModule
 from pytorch_lightning import Trainer
 from pytorch_lightning.utilities import move_data_to_device
+from pytorch_lightning.utilities.distributed import rank_zero_only
 from torch import nn
-import torch.distributed as dist
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset as TorchDataset
 from tqdm import tqdm
@@ -108,6 +108,8 @@ def maybe_wrap_model(model):
         raise TypeError(f"Model must be a LightningModule, got {type(model)}")
     return model
 
+def _do_nothing(wargs, **kwargs):
+    pass
 
 @torch.inference_mode()
 def cache_or_load_vectors(
@@ -129,18 +131,16 @@ def cache_or_load_vectors(
     Returns:
         ts.TensorStore: cached dataset vectors
     """
+    # setup the distributed environment, if any.
+    # This is done automatically by the trainer when lauching a task (hacky, but working).
+    # Might be unnecessary in future versions of lightning.
+    if model.strategy.launcher is not None:
+        model.strategy.launcher.launch(_do_nothing)
 
     if not isinstance(config, CacheConfig):
         config = CacheConfig(**config)
 
     model = maybe_wrap_model(model)
-    
-    dist.init_process_group(
-        backend='nccl', 
-        init_method=f'file://{config.cache_dir}', 
-        world_size=torch.cuda.device_count(), 
-        rank=os.environ['LOCAL_RANK']
-        )
 
     # infer the vector size from the model output
     dset_shape = _infer_dset_shape(
@@ -170,13 +170,12 @@ def cache_or_load_vectors(
         target_file, dset_shape, driver=config.driver, dtype=config.dtype
     )
 
-    dist.barrier()
+    model.strategy.barrier("check-if-target-file-exists")
     if target_file.exists():
         logger.info(f"Loading pre-computed vectors from {target_file.absolute()}")
-
     else:
-        local_rank = int(os.environ['LOCAL_RANK'])
-        if local_rank == 0:
+        model.strategy.barrier("index-and-train-search-setup")
+        if model.local_rank == 0:
             logger.info(f"Writing vectors to {target_file.absolute()}")
             store = ts.open(ts_config, create=True, delete_existing=False).result()
             with open(target_file / "config.json", "w") as f:
@@ -209,7 +208,7 @@ def cache_or_load_vectors(
             future.result()
 
         # close the store
-        dist.barrier()
+        model.strategy.barrier("close-tensor-store")
         del store
 
     # reload the same TensorStore in read mode
