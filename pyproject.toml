@@ -41,7 +41,7 @@ pydantic = "^1.10.2"
 hydra-core = "^1.2.0"
 faiss-gpu = { platform = 'linux', version = '^1.6.5' }
 faiss-cpu = { platform = 'darwin', version = '^1.6.5' }
-elasticsearch = "^7"
+elasticsearch = "^7.17.9"
 
 [tool.poetry.group.dev.dependencies]
 black = {version = "^22.10.0", allow-prereleases = true}
