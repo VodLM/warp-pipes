@@ -161,12 +161,14 @@ def cache_or_load_vectors(
     ts_config = make_ts_config(
         target_file, dset_shape, driver=config.driver, dtype=config.dtype
     )
-    # synchronize all workers before checking if the file exists
-    # dist.barrier()
 
-    if not target_file.exists():
-        # only the first worker creates the file
-        if dist.get_rank() == 0:
+    dist.barrier()
+    if target_file.exists():
+        logger.info(f"Loading pre-computed vectors from {target_file.absolute()}")
+
+    else:
+        local_rank = int(os.environ['LOCAL_RANK'])
+        if local_rank == 0:
             logger.info(f"Writing vectors to {target_file.absolute()}")
             store = ts.open(ts_config, create=True, delete_existing=False).result()
             with open(target_file / "config.json", "w") as f:
@@ -174,13 +176,15 @@ def cache_or_load_vectors(
                     k: v for k, v in ts_config.items() if k in ["driver", "kvstore"]
                 }
                 json.dump(ts_config_, f)
-
+        else:
+            store = load_store(target_file, read=False, write=True)
         # init a callback to store predictions in the TensorStore
         tensorstore_callback = TensorStoreCallback(
             store=store,
             output_key=config.model_output_key,
             asynch=True,
         )
+
         _process_dataset_with_lightning(
             dataset=dataset,
             model=model,
@@ -189,6 +193,7 @@ def cache_or_load_vectors(
             collate_fn=config.collate_fn,
             loader_kwargs=config.loader_kwargs,
         )
+
         futures = tensorstore_callback.futures
 
         # make sure all writes are complete
@@ -196,12 +201,8 @@ def cache_or_load_vectors(
             future.result()
 
         # close the store
+        dist.barrier()
         del store
-    else:
-        logger.info(f"Loading pre-computed vectors from {target_file.absolute()}")
-
-    # synchronize all workers after checking if the file exists
-    # dist.barrier()
 
     # reload the same TensorStore in read mode
     store = load_store(target_file, read=True, write=False)
