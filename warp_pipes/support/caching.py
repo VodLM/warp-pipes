@@ -212,7 +212,7 @@ def cache_or_load_vectors(
 
         # close the store
         # synchronize all workers before closing the vector store
-        print("finish_writing_vectors"")
+        print("finish_writing_vectors")
         trainer.strategy.barrier("finish_writing_vectors")
         del store
 
