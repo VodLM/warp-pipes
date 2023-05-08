@@ -113,6 +113,7 @@ def _do_nothing(wargs, **kwargs):
 @torch.inference_mode()
 def cache_or_load_vectors(
     dataset: Dataset,
+    trainer: Trainer,
     model: Callable | nn.Module | LightningModule,
     *,
     cache_dir: Path,
@@ -138,10 +139,8 @@ def cache_or_load_vectors(
     # setup the distributed environment, if any.
     # This is done automatically by the trainer when lauching a task (hacky, but working).
     # Might be unnecessary in future versions of lightning.
-    print(model)
-    print(type(model))
-    if model.trainer.strategy.launcher is not None:
-        model.trainer.strategy.launcher.launch(_do_nothing)
+    if trainer.strategy.launcher is not None:
+        trainer.strategy.launcher.launch(_do_nothing)
     
     # infer the vector size from the model output
     dset_shape = _infer_dset_shape(
@@ -171,12 +170,12 @@ def cache_or_load_vectors(
         target_file, dset_shape, driver=config.driver, dtype=config.dtype
     )
 
-    model.trainer.strategy.barrier("check-if-target-file-exists")
+    trainer.strategy.barrier("check-if-target-file-exists")
     if target_file.exists():
         logger.info(f"Loading pre-computed vectors from {target_file.absolute()}")
     else:
-        model.trainer.strategy.barrier("index-and-train-search-setup")
-        if model.trainer.local_rank == 0:
+        trainer.strategy.barrier("index-and-train-search-setup")
+        if trainer.local_rank == 0:
             logger.info(f"Writing vectors to {target_file.absolute()}")
             store = ts.open(ts_config, create=True, delete_existing=False).result()
             with open(target_file / "config.json", "w") as f:
