@@ -107,7 +107,7 @@ def maybe_wrap_model(model):
         raise TypeError(f"Model must be a LightningModule, got {type(model)}")
     return model
 
-def _do_nothing(wargs, **kwargs):
+def _do_nothing(*args, **kwargs):
     pass
 
 @torch.inference_mode()

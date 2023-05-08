@@ -114,7 +114,6 @@ class Index(Pipe):
 
         # Register the model and the pipes used
         # to handle the processing of the data
-        print("Init Index:", trainer)
         self.predict_index = predict.Predict(
             model, trainer=trainer, cache_dir=cache_dir, cache_config=index_cache_config
         )
