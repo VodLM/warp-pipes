@@ -214,9 +214,15 @@ def cache_or_load_vectors(
         trainer.strategy.barrier("finish_writing_vectors")
         del store
 
+    # synchronize all workers before validating the vector store
+    trainer.strategy.barrier("start_validating_vectors")
+
     # reload the same TensorStore in read mode
     store = load_store(target_file, read=True, write=False)
     _validate_store(store, dset_shape, target_file)
+
+    # synchronize all workers after validating the vector store
+    trainer.strategy.barrier("finish_validating_vectors")
 
     return store
 
