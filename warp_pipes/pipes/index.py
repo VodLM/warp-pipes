@@ -115,10 +115,10 @@ class Index(Pipe):
         # Register the model and the pipes used
         # to handle the processing of the data
         self.predict_index = predict.Predict(
-            model, trainer=trainer, cache_dir=cache_dir, cache_config=index_cache_config
+            model, cache_dir=cache_dir, cache_config=index_cache_config
         )
         self.predict_queries = predict.Predict(
-            model, trainer=trainer, cache_dir=cache_dir, cache_config=query_cache_config
+            model, cache_dir=cache_dir, cache_config=query_cache_config
         )
 
         # build the engines and save them to disk
