@@ -195,8 +195,10 @@ def cache_or_load_vectors(
         else:
             store = load_store(target_file, read=False, write=True)
 
-        # synchronize all workers before writing to the vector store
+        # synchronize all workers before writing to the vector store'
+        logger.info(f"Worker {trainer.local_rank} is about to hit the barrier")
         trainer.strategy.barrier(f"{target_file} - Writing vectors..")
+        logger.info(f"Worker {trainer.local_rank} has hit the barrier")
         # init a callback to store predictions in the TensorStore
         tensorstore_callback = TensorStoreCallback(
             store=store,
@@ -223,7 +225,9 @@ def cache_or_load_vectors(
         del store
 
     # use a barrier to ensure all workers have finished checking before proceeding with any further operations
+    logger.info(f"Worker {trainer.local_rank} is about to hit the barrier")
     trainer.strategy.barrier(f"{target_file} - Waiting for all workers to finish existence check..")
+    logger.info(f"Worker {trainer.local_rank} has hit the barrier")
 
     # reload the same TensorStore in read mode
     store = load_store(target_file, read=True, write=False)
