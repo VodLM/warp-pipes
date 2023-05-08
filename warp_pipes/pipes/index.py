@@ -51,6 +51,7 @@ class Index(Pipe):
         *,
         cache_dir: os.PathLike = None,
         engines: List[Search | Dict] = None,
+        trainer: pl.Trainer = None,
         model: pl.LightningModule | nn.Module = None,
         index_cache_config: Dict | caching.CacheConfig,
         query_cache_config: Dict | caching.CacheConfig,
@@ -114,10 +115,10 @@ class Index(Pipe):
         # Register the model and the pipes used
         # to handle the processing of the data
         self.predict_index = predict.Predict(
-            model, cache_dir=cache_dir, cache_config=index_cache_config
+            model, trainer=trainer, cache_dir=cache_dir, cache_config=index_cache_config
         )
         self.predict_queries = predict.Predict(
-            model, cache_dir=cache_dir, cache_config=query_cache_config
+            model, trainer=trainer, cache_dir=cache_dir, cache_config=query_cache_config
         )
 
         # build the engines and save them to disk

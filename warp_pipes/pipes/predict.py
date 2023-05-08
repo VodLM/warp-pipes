@@ -72,6 +72,7 @@ class PredictWithCache(Pipe):
 
     def __init__(
         self,
+        trainer: pl.Trainer,
         model: pl.LightningModule | nn.Module | Callable,
         *,
         cache_dir: Path,
@@ -178,6 +179,7 @@ class PredictWithCache(Pipe):
         # cache the dataset
         store = caching.cache_or_load_vectors(
             dataset,
+            self.trainer,
             self.model,
             cache_dir=self.cache_dir,
             config=cache_config_,
@@ -258,11 +260,12 @@ class PredictWithCache(Pipe):
 class Predict(PredictWithCache):
     def __init__(
         self,
+        trainer: pl.Trainer,
         model: pl.LightningModule | nn.Module | Callable,
         requires_cache: bool = False,
         **kwargs,
     ):
-        super(Predict, self).__init__(model=model, **kwargs)
+        super(Predict, self).__init__(model=model, trainer=trainer, **kwargs)
         self.requires_cache = requires_cache
 
     def _call_batch(
