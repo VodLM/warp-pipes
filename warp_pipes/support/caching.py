@@ -173,7 +173,11 @@ def cache_or_load_vectors(
     if target_file.exists():
         logger.info(f"Loading pre-computed vectors from {target_file.absolute()}")
     else:
+        # add a logging message before the barrier
+        logger.info(f"Worker {trainer.local_rank} is about to hit the barrier")
         trainer.strategy.barrier(f"{target_file} - Creating vector store..")
+        # add a logging message after the barrier
+        logger.info(f"Worker {trainer.local_rank} has hit the barrier")
         if trainer.local_rank == 0:
             logger.info(f"Writing vectors to {target_file.absolute()}")
             store = ts.open(ts_config, create=True, delete_existing=False).result()
