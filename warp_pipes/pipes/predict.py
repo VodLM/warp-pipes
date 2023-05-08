@@ -260,8 +260,8 @@ class PredictWithCache(Pipe):
 class Predict(PredictWithCache):
     def __init__(
         self,
-        trainer: pl.Trainer,
         model: pl.LightningModule | nn.Module | Callable,
+        trainer: pl.Trainer,
         requires_cache: bool = False,
         **kwargs,
     ):
