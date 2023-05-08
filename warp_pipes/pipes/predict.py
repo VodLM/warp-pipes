@@ -81,6 +81,7 @@ class PredictWithCache(Pipe):
     ):
         super(PredictWithCache, self).__init__(**kwargs)
         self.model = model
+        self.trainer = trainer
         self.cache_dir = cache_dir
         self.stores: Dict[str, ts.TensorStore] = {}
         if not isinstance(cache_config, caching.CacheConfig):
