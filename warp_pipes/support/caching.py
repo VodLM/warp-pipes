@@ -170,11 +170,9 @@ def cache_or_load_vectors(
         target_file, dset_shape, driver=config.driver, dtype=config.dtype
     )
 
-    trainer.strategy.barrier("check-if-target-file-exists")
     if target_file.exists():
         logger.info(f"Loading pre-computed vectors from {target_file.absolute()}")
     else:
-        trainer.strategy.barrier("index-and-train-search-setup")
         if trainer.local_rank == 0:
             logger.info(f"Writing vectors to {target_file.absolute()}")
             store = ts.open(ts_config, create=True, delete_existing=False).result()
@@ -185,6 +183,10 @@ def cache_or_load_vectors(
                 json.dump(ts_config_, f)
         else:
             store = load_store(target_file, read=False, write=True)
+
+        # synchronize all workers before writing to the vector store
+        trainer.strategy.barrier("start_writing_vectors")
+
         # init a callback to store predictions in the TensorStore
         tensorstore_callback = TensorStoreCallback(
             store=store,
@@ -208,7 +210,8 @@ def cache_or_load_vectors(
             future.result()
 
         # close the store
-        model.strategy.barrier("close-tensor-store")
+        # synchronize all workers before closing the vector store
+        trainer.strategy.barrier("finish_writing_vectors")
         del store
 
     # reload the same TensorStore in read mode
