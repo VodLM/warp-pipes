@@ -172,11 +172,16 @@ def cache_or_load_vectors(
 
     # add a logging message before the barrier
     logger.info(f"Worker {trainer.local_rank} is about to hit the barrier")
-    trainer.strategy.barrier(f"{target_file} - Checking if vector store exists..")
-    # add a logging message after the barrier
+    trainer.strategy.barrier(f"{target_file} - Waiting for all workers to reach existence check..")
     logger.info(f"Worker {trainer.local_rank} has hit the barrier")
 
-    if target_file.exists():
+    # check if target_file exists on rank 0 and broadcast the result to all workers
+    target_file_exists = False
+    if trainer.local_rank == 0:
+        target_file_exists = target_file.exists()
+    target_file_exists = trainer.strategy.broadcast(target_file_exists, 0)
+
+    if target_file_exists:
         logger.info(f"Loading pre-computed vectors from {target_file.absolute()}")
     else:
         if trainer.local_rank == 0:
@@ -216,6 +221,9 @@ def cache_or_load_vectors(
 
         # close the store
         del store
+
+    # use a barrier to ensure all workers have finished checking before proceeding with any further operations
+    trainer.strategy.barrier(f"{target_file} - Waiting for all workers to finish existence check..")
 
     # reload the same TensorStore in read mode
     store = load_store(target_file, read=True, write=False)
