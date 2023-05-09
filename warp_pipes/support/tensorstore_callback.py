@@ -71,7 +71,6 @@ class TensorStoreCallback(Callback):
         outputs: Batch,
         batch: Batch,
         batch_idx: int,
-        dataloader_idx: int,
     ) -> None:
         """store the outputs of the prediction step to the cache"""
         while len(self.futures) > 0:
