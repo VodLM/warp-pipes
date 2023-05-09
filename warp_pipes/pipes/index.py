@@ -114,6 +114,7 @@ class Index(Pipe):
 
         # Register the model and the pipes used
         # to handle the processing of the data
+        print(type(trainer))
         self.predict_index = predict.Predict(
             model, trainer=trainer, cache_dir=cache_dir, cache_config=index_cache_config
         )
@@ -123,7 +124,7 @@ class Index(Pipe):
 
         # build the engines and save them to disk
 
-        self.build_engines(corpus, trainer)
+        self.build_engines(corpus)
 
     def _validate_engines(self, engines: List[Search]):
         if len(engines) == 0:
@@ -147,9 +148,9 @@ class Index(Pipe):
                 f"{all_index_fields}"
             )
 
-    def build_engines(self, corpus: Dataset, trainer: pl.Trainer):
+    def build_engines(self, corpus: Dataset):
         if self.requires_vector:
-            vectors = self.predict_index.cache(corpus, trainer, return_store=True)
+            vectors = self.predict_index.cache(corpus, return_store=True)
         else:
             vectors = None
 
