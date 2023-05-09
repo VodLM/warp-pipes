@@ -150,6 +150,7 @@ class Index(Pipe):
 
     def build_engines(self, corpus: Dataset):
         if self.requires_vector:
+            print(type(self.predict_index.trainer))
             vectors = self.predict_index.cache(corpus, return_store=True)
         else:
             vectors = None
