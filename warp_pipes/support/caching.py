@@ -192,36 +192,35 @@ def cache_or_load_vectors(
 
         # synchronize all workers before writing to the vector store'
         trainer.strategy.barrier(f"{target_file} - Writing vectors..")
-        store = load_store(target_file, read=False, write=True)
+        with load_store(target_file, read=False, write=True) as store:
+            # init a callback to store predictions in the TensorStore
+            tensorstore_callback = TensorStoreCallback(
+                store=store,
+                output_key=config.model_output_key,
+                asynch=True,
+            )
         
-        # init a callback to store predictions in the TensorStore
-        tensorstore_callback = TensorStoreCallback(
-            store=store,
-            output_key=config.model_output_key,
-            asynch=True,
-        )
-        
-        _process_dataset_with_lightning(
-            dataset=dataset,
-            model=model,
-            tensorstore_callback=tensorstore_callback,
-            trainer=config.trainer,
-            collate_fn=config.collate_fn,
-            loader_kwargs=config.loader_kwargs,
-        )
+            _process_dataset_with_lightning(
+                dataset=dataset,
+                model=model,
+                tensorstore_callback=tensorstore_callback,
+                trainer=config.trainer,
+                collate_fn=config.collate_fn,
+                loader_kwargs=config.loader_kwargs,
+            )
 
-        futures = tensorstore_callback.futures
+            futures = tensorstore_callback.futures
 
-        # make sure all writes are complete
-        for future in futures:
-            future.result()
+            # make sure all writes are complete
+            for future in futures:
+                future.result()
 
         # close the store
         del store
 
     # reload the same TensorStore in read mode
-    store = load_store(target_file, read=True, write=False)
-    _validate_store(store, dset_shape, target_file)
+    with load_store(target_file, read=True, write=False) as store:
+        _validate_store(store, dset_shape, target_file)
 
     return store
 
