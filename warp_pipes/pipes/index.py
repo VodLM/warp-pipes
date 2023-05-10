@@ -114,7 +114,6 @@ class Index(Pipe):
 
         # Register the model and the pipes used
         # to handle the processing of the data
-        print(type(trainer))
         self.predict_index = predict.Predict(
             model, trainer=trainer, cache_dir=cache_dir, cache_config=index_cache_config
         )
@@ -150,7 +149,6 @@ class Index(Pipe):
 
     def build_engines(self, corpus: Dataset):
         if self.requires_vector:
-            print(type(self.predict_index.trainer))
             vectors = self.predict_index.cache(corpus, return_store=True)
         else:
             vectors = None
