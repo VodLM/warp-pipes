@@ -170,10 +170,7 @@ def cache_or_load_vectors(
         target_file, dset_shape, driver=config.driver, dtype=config.dtype
     )
 
-    # add a logging message before the barrier
-    logger.info(f"Worker {trainer.local_rank} is about to hit the barrier")
-    trainer.strategy.barrier(f"{target_file} - Waiting for all workers to reach existence check..")
-    logger.info(f"Worker {trainer.local_rank} has hit the barrier")
+    # trainer.strategy.barrier(f"{target_file} - Waiting for all workers to synchronize..")
 
     # check if target_file exists on rank 0 and broadcast the result to all workers
     target_file_exists = False
@@ -192,13 +189,11 @@ def cache_or_load_vectors(
                     k: v for k, v in ts_config.items() if k in ["driver", "kvstore"]
                 }
                 json.dump(ts_config_, f)
-        else:
-            store = load_store(target_file, read=False, write=True)
 
         # synchronize all workers before writing to the vector store'
-        # logger.info(f"Worker {trainer.local_rank} is about to hit the barrier")
-        # trainer.strategy.barrier(f"{target_file} - Writing vectors..")
-        # logger.info(f"Worker {trainer.local_rank} has hit the barrier")
+        trainer.strategy.barrier(f"{target_file} - Writing vectors..")
+        store = load_store(target_file, read=False, write=True)
+        
         # init a callback to store predictions in the TensorStore
         tensorstore_callback = TensorStoreCallback(
             store=store,
@@ -223,11 +218,6 @@ def cache_or_load_vectors(
 
         # close the store
         del store
-
-    # use a barrier to ensure all workers have finished checking before proceeding with any further operations
-    # logger.info(f"Worker {trainer.local_rank} is about to hit the barrier")
-    # trainer.strategy.barrier(f"{target_file} - Waiting for all workers to finish existence check..")
-    # logger.info(f"Worker {trainer.local_rank} has hit the barrier")
 
     # reload the same TensorStore in read mode
     store = load_store(target_file, read=True, write=False)
