@@ -217,10 +217,10 @@ def cache_or_load_vectors(
             future.result()
 
         # close the store
+        trainer.strategy.barrier(f"{target_file} - Waiting for all workers to synchronize..")
         del store
 
     # reload the same TensorStore in read mode
-    trainer.strategy.barrier(f"{target_file} - Waiting for all workers to synchronize..")
     store = load_store(target_file, read=True, write=False)
     _validate_store(store, dset_shape, target_file)
 
