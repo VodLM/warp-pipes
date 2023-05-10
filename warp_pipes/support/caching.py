@@ -170,8 +170,6 @@ def cache_or_load_vectors(
         target_file, dset_shape, driver=config.driver, dtype=config.dtype
     )
 
-    # trainer.strategy.barrier(f"{target_file} - Waiting for all workers to synchronize..")
-
     # check if target_file exists on rank 0 and broadcast the result to all workers
     target_file_exists = False
     if trainer.local_rank == 0:
@@ -217,7 +215,7 @@ def cache_or_load_vectors(
             future.result()
 
         # close the store
-        trainer.strategy.barrier(f"{target_file} - Waiting for all workers to synchronize..")
+        trainer.strategy.barrier(f"{target_file} - Waiting for all workers to finish..")
         del store
 
     # reload the same TensorStore in read mode
