@@ -193,7 +193,7 @@ def cache_or_load_vectors(
                 json.dump(ts_config_, f)
 
         # synchronize all workers before writing to the vector store'
-        barrier_fn(f"{target_file} - Writing vectors..")
+        barrier_fn(f"{target_file} - Writing vectors to store..")
         store = load_store(target_file, read=False, write=True)
         
         # init a callback to store predictions in the TensorStore
@@ -219,11 +219,10 @@ def cache_or_load_vectors(
             future.result()
 
         # close the store
-        barrier_fn(f"{target_file} - Waiting for all workers to finish..")
         del store
 
     # reload the same TensorStore in read mode
-    barrier_fn(f"{target_file} - Loading vectors..")
+    barrier_fn(f"{target_file} - Loading vectors from store..")
     store = load_store(target_file, read=True, write=False)
     _validate_store(store, dset_shape, target_file)
 
