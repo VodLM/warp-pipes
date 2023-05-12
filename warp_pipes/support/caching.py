@@ -1,4 +1,5 @@
 from __future__ import annotations
+import functools
 
 import json
 import os
@@ -16,6 +17,7 @@ from typing import Union
 
 import numpy as np
 import pydantic
+import rich
 import tensorstore as ts
 import torch
 from datasets import Dataset
@@ -141,6 +143,8 @@ def cache_or_load_vectors(
     # Might be unnecessary in future versions of lightning.
     if trainer.strategy.launcher is not None:
         trainer.strategy.launcher.launch(_do_nothing)
+
+    barrier_fn = functools.partial(_barrier_fn, trainer=trainer)
     
     # infer the vector size from the model output
     dset_shape = _infer_dset_shape(
@@ -189,7 +193,7 @@ def cache_or_load_vectors(
                 json.dump(ts_config_, f)
 
         # synchronize all workers before writing to the vector store'
-        trainer.strategy.barrier(f"{target_file} - Writing vectors..")
+        barrier_fn(f"{target_file} - Writing vectors..")
         store = load_store(target_file, read=False, write=True)
         
         # init a callback to store predictions in the TensorStore
@@ -215,10 +219,11 @@ def cache_or_load_vectors(
             future.result()
 
         # close the store
-        trainer.strategy.barrier(f"{target_file} - Waiting for all workers to finish..")
+        barrier_fn(f"{target_file} - Waiting for all workers to finish..")
         del store
 
     # reload the same TensorStore in read mode
+    barrier_fn(f"{target_file} - Loading vectors..")
     store = load_store(target_file, read=True, write=False)
     _validate_store(store, dset_shape, target_file)
 
@@ -389,3 +394,13 @@ def _infer_dset_shape(
     output = model(batch)
     vector_shape = select_key_from_output(output, model_output_key).shape[1:]
     return [len(dataset), *vector_shape]
+
+def _barrier_fn(name: str, trainer: Trainer) -> None:
+    """Barrier to synchronize all processes."""
+    rich.print(
+        f"[bold yellow][Rank {(trainer.global_rank + 1)} / {trainer.world_size}][/bold yellow] waiting: `{name}` ..."
+    )
+    trainer.strategy.barrier(name)
+    rich.print(
+        f"[bold green][Rank {(trainer.global_rank + 1)} / {trainer.world_size}][/bold green] completed: `{name}` ..."
+    )
